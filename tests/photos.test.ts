@@ -133,3 +133,15 @@ it("HEIC 经独立解码进程生成可浏览预览；4800 万像素 JPEG 正确
   const r = await getAsset(new Request("http://localhost:3011/api/assets/ignored?size=display"), { params: Promise.resolve({ id: result.photo.assetId }) });
   expect((await sharp(Buffer.from(await r.arrayBuffer())).metadata()).width).toBe(2560);
 }, 30_000);
+it("EXIF GPS 使用原始经纬度，旋转方向生效，缺少拍摄日期不补今天", async () => {
+  const image = await sharp({ create: { width: 80, height: 50, channels: 3, background: "#888888" } }).jpeg()
+    .withMetadata({ orientation: 6 })
+    .withExifMerge({ IFD3: { GPSLatitudeRef: "N", GPSLatitude: "31/1 13/1 48/1", GPSLongitudeRef: "E", GPSLongitude: "121/1 28/1 12/1" } }).toBuffer();
+  const { photo } = await uploadPhoto(image, "synthetic-gps.jpg", first, people, null);
+  expect(photo.latitude).toBeCloseTo(31.23, 6); expect(photo.longitude).toBeCloseTo(121.47, 6);
+  expect(photo.locationSource).toBe("exif"); expect(photo.originalMetadata.latitude).toBe(photo.latitude);
+  expect(photo.takenOn).toBeNull(); expect(photo.width).toBe(50); expect(photo.height).toBe(80);
+  const response = await getAsset(new Request("http://localhost:3011/api/assets/ignored?size=display"), { params: Promise.resolve({ id: photo.assetId }) });
+  const output = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+  expect(output.width).toBe(50); expect(output.height).toBe(80); expect(output.exif).toBeUndefined();
+});
