@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AttributionControl, LngLat, Map as VectorMap, NavigationControl, ScaleControl, setWorkerCount, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
+import { AttributionControl, LngLat, Map as VectorMap, NavigationControl, Popup, ScaleControl, setWorkerCount, setWorkerUrl, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 import { Compass, Maximize2, Minimize2, RotateCcw } from "lucide-react";
 import type { Coordinates, PhotoPoint } from "@/lib/photo-types";
 import type { PhotoCluster } from "@/lib/photo-domain";
-import { continuousMapStyle, footprintFeatures, MAP_FONT, mapScaleName, rangeFeatures, sampleFootprints } from "@/lib/continuous-map";
+import { continuousMapStyle, footprintFeatures, footprintLayers, mapScaleName, rangeFeatures, sampleFootprints } from "@/lib/continuous-map";
 import { setMapActive } from "@/lib/map-activity";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./continuous-map.css";
@@ -70,8 +70,28 @@ export function ContinuousMap(props: Props) {
     engine.addControl(new NavigationControl({ showCompass: false }), "top-right");
     engine.addControl(new ScaleControl({ maxWidth: 100, unit: "metric" }), "bottom-left");
     engine.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    const tooltip = new Popup({ closeButton: false, closeOnClick: false, offset: 12, className: "photo-dot-tooltip", maxWidth: "220px" });
+    let hoveredId: string | number | undefined;
+    const clearHover = () => {
+      if (hoveredId !== undefined && engine.getSource("footprints")) engine.removeFeatureState({ source: "footprints", id: hoveredId }, "hover");
+      hoveredId = undefined; tooltip.remove();
+    };
+    const hitAt = (event: MapMouseEvent) => {
+      // Small visual marks still have a comfortable touch/click target.
+      const pad = matchMedia("(pointer: coarse)").matches ? 16 : 10;
+      return engine.queryRenderedFeatures([[event.point.x - pad, event.point.y - pad], [event.point.x + pad, event.point.y + pad]], { layers: pointLayers })
+        .filter(hit => hit.geometry.type === "Point")
+        .sort((a, b) => {
+          const distance = (hit: typeof a) => {
+            const at = engine.project((hit.geometry as GeoJSON.Point).coordinates as [number, number]);
+            return Math.hypot(at.x - event.point.x, at.y - event.point.y);
+          };
+          return distance(a) - distance(b);
+        })[0];
+    };
 
     const markMoving = () => {
+      clearHover();
       wrapper.current?.setAttribute("data-moving", "true");
       setMapActive(owner, true);
       frameTimes.length = 0; lastFrame = 0;
@@ -109,19 +129,18 @@ export function ContinuousMap(props: Props) {
     engine.on("moveend", markStopped);
     engine.on("render", recordFrame);
     engine.on("dataloading", loadingStarted);
+    engine.on("sourcedataloading", event => { if (event.sourceId === "footprints") clearHover(); });
     engine.on("idle", loaded);
     engine.on("error", failed);
     slowTimer = setTimeout(() => { if (alive && !engine.areTilesLoaded()) failed(); }, 15000);
 
     engine.on("style.load", () => {
       if (!alive || engine.getSource("footprints")) return;
-      engine.addSource("footprints", { type: "geojson", data: footprintFeatures(currentData.current.shownPoints), cluster: true, clusterMaxZoom: 17, clusterRadius: 42, maxzoom: 18 });
-      engine.addLayer({ id: "photo-clusters", type: "circle", source: "footprints", filter: ["has", "point_count"], paint: { "circle-color": "#dcba8c", "circle-radius": ["step", ["get", "point_count"], 16, 20, 20, 100, 25], "circle-stroke-color": "#fff1d6", "circle-stroke-width": 1.5, "circle-opacity": .96 } });
-      engine.addLayer({ id: "photo-cluster-count", type: "symbol", source: "footprints", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": MAP_FONT, "text-size": 12, "text-allow-overlap": true }, paint: { "text-color": "#252c29" } });
-      engine.addLayer({ id: "photo-points", type: "circle", source: "footprints", filter: ["!", ["has", "point_count"]], paint: { "circle-color": "#e8c797", "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 16, 8], "circle-stroke-color": "#fff2dd", "circle-stroke-width": 1.5 } });
+      engine.addSource("footprints", { type: "geojson", data: footprintFeatures(currentData.current.shownPoints), cluster: true, clusterMaxZoom: 17, clusterRadius: 20, maxzoom: 18 });
+      for (const layer of footprintLayers()) engine.addLayer(layer);
       engine.addSource("photo-range", { type: "geojson", data: rangeFeatures(latest.current.center, latest.current.radius ?? 20) });
-      engine.addLayer({ id: "range-outline", type: "line", source: "photo-range", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#f4dfb2", "line-width": 2, "line-dasharray": [3, 2] } });
-      engine.addLayer({ id: "range-center", type: "circle", source: "photo-range", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-color": "#132933", "circle-radius": 5, "circle-stroke-color": "#f4dfb2", "circle-stroke-width": 2 } });
+      engine.addLayer({ id: "range-outline", type: "line", source: "photo-range", filter: ["==", ["geometry-type"], "LineString"], paint: { "line-color": "#90bdce", "line-width": 1.5, "line-opacity": .9 } });
+      engine.addLayer({ id: "range-center", type: "circle", source: "photo-range", filter: ["==", ["geometry-type"], "Point"], paint: { "circle-color": "#132933", "circle-radius": 3, "circle-stroke-color": "#b2d4df", "circle-stroke-width": 1.2 } });
       setReady(true);
     });
 
@@ -132,8 +151,9 @@ export function ContinuousMap(props: Props) {
         if (Math.hypot(projected.x - event.point.x, projected.y - event.point.y) > 3) return;
         latest.current.onPick({ lat: event.lngLat.lat, lng: event.lngLat.wrap().lng }); return;
       }
-      const hit = engine.queryRenderedFeatures([[event.point.x - 8, event.point.y - 8], [event.point.x + 8, event.point.y + 8]], { layers: pointLayers })[0];
+      const hit = hitAt(event);
       if (!hit || hit.geometry.type !== "Point") return;
+      clearHover();
       const at = hit.geometry.coordinates as [number, number];
       const request = ++selectionRequest;
       const dataAtClick = currentData.current;
@@ -161,9 +181,19 @@ export function ContinuousMap(props: Props) {
     engine.on("click", handleClick);
     const cursor = (event: MapMouseEvent) => {
       if (!engine.getLayer("photo-points") || engine.isMoving()) return;
-      canvas.style.cursor = latest.current.picking ? "crosshair" : engine.queryRenderedFeatures(event.point, { layers: pointLayers }).length ? "pointer" : "";
+      const hit = latest.current.picking ? undefined : hitAt(event);
+      canvas.style.cursor = latest.current.picking ? "crosshair" : hit ? "pointer" : "";
+      if (hit?.id === hoveredId) return;
+      clearHover();
+      if (!hit || hit.id === undefined || hit.geometry.type !== "Point") return;
+      hoveredId = hit.id;
+      engine.setFeatureState({ source: "footprints", id: hit.id }, { hover: true });
+      const photo = currentData.current.pointIndex.get(String(hit.properties.id));
+      const label = currentData.current.sampleCount ? "模拟足迹" : hit.properties.cluster ? `${hit.properties.point_count} 张照片` : photo?.place || "旅途照片";
+      tooltip.setLngLat(hit.geometry.coordinates as [number, number]).setText(`${label}\n${hit.properties.cluster ? "点击展开这一片足迹" : "点击查看照片"}`).addTo(engine);
     };
     engine.on("mousemove", cursor);
+    canvas.addEventListener("mouseleave", clearHover);
     const pickWithKeyboard = (event: KeyboardEvent) => {
       if (event.key === "Enter" && latest.current.picking) {
         const at = engine.getCenter().wrap();
@@ -185,6 +215,8 @@ export function ContinuousMap(props: Props) {
       clearTimeout(pendingTimer); clearTimeout(slowTimer);
       document.removeEventListener("visibilitychange", visibility);
       canvas.removeEventListener("keydown", pickWithKeyboard);
+      canvas.removeEventListener("mouseleave", clearHover);
+      tooltip.remove();
       engine.remove(); mapRef.current = null; setMapActive(owner, false);
     };
   }, [attempt]);
@@ -234,7 +266,7 @@ export function ContinuousMap(props: Props) {
     {error && <div className="map-load-error" role="alert"><span>{error}</span><button onClick={() => setAttempt(v => v + 1)}><RotateCcw size={14} />重试地图</button></div>}
     <details className="map-prototype-checks"><summary>体验选项</summary><div>
       <label>地图上的点<select aria-label="流畅度测试点数" value={sampleCount} onChange={e => setSampleCount(Number(e.target.value))}><option value={0}>我的照片 · {props.points.length} 个点</option><option value={2000}>2,000 个模拟点</option><option value={10000}>10,000 个模拟点</option></select></label>
-      <p>{sampleCount ? "模拟点只在此页面显示，不保存，也不加载照片。" : "点按聚合光点，展开并查看已有照片。"}</p>
+      <p>{sampleCount ? "模拟点只在此页面显示，不保存，也不加载照片。" : "点击圆点查看照片；聚合的足迹会随缩放展开。"}</p>
       <output aria-label="地图性能测量">{metrics ? `最近操作 ${metrics.fps} 帧/秒 · 95% 帧间隔 ≤ ${metrics.p95}ms` : "拖动或缩放后显示本次渲染帧率"}</output>
       <small>当前设备的渲染事件采样，网络加载另计。</small>
       <small>中心 {position[1].toFixed(4)}°, {position[0].toFixed(4)}° · 缩放 {zoom.toFixed(1)}</small>

@@ -1,4 +1,4 @@
-import type { ExpressionSpecification, StyleSpecification, SymbolLayerSpecification } from "maplibre-gl";
+import type { ExpressionSpecification, LayerSpecification, StyleSpecification, SymbolLayerSpecification } from "maplibre-gl";
 import type { FeatureCollection, Point } from "geojson";
 import type { Coordinates, PhotoPoint } from "./photo-types";
 import { circlePath } from "./photo-domain";
@@ -54,10 +54,28 @@ export function continuousMapStyle(): StyleSpecification {
   };
 }
 
-// Only IDs enter the worker. Private captions, photos and participant details
-// remain in the authenticated page and are never sent to the tile provider.
+// Restrained, stable colours without loading photo textures during map motion.
+const footprintPalette = ["#a5b9ab", "#9cbbc9", "#c5b294", "#b6a8bf", "#c39e91", "#b8bdb6"];
+function footprintColour(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (Math.imul(hash, 31) + id.charCodeAt(i)) >>> 0;
+  return footprintPalette[hash % footprintPalette.length];
+}
+
+export function footprintLayers(): LayerSpecification[] {
+  const cluster = ["has", "point_count"] as ExpressionSpecification;
+  const hovered: ExpressionSpecification = ["boolean", ["feature-state", "hover"], false];
+  return [
+    { id: "photo-cluster-halo", type: "circle", source: "footprints", filter: cluster, paint: { "circle-color": "#b9cccd", "circle-radius": ["step", ["get", "point_count"], 9, 100, 11, 1000, 13], "circle-opacity": ["case", hovered, .12, 0], "circle-stroke-color": "#bdd1d0", "circle-stroke-width": .6, "circle-stroke-opacity": ["case", hovered, .65, 0] } },
+    { id: "photo-clusters", type: "circle", source: "footprints", filter: cluster, paint: { "circle-color": "#9bb2a9", "circle-radius": ["step", ["get", "point_count"], 4.5, 100, 5.5, 1000, 6.5], "circle-stroke-color": "#edf3ed", "circle-stroke-width": ["case", hovered, 1.8, .85], "circle-stroke-opacity": .9 } },
+    { id: "photo-points", type: "circle", source: "footprints", filter: ["!", cluster], paint: { "circle-color": ["get", "colour"], "circle-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 10, 3.6, 18, 4.3], "circle-stroke-color": "#edf3ed", "circle-stroke-width": ["case", hovered, 1.8, .75], "circle-stroke-opacity": .85 } },
+  ];
+}
+
+// Only coordinates, IDs and display colours enter the worker. Private captions,
+// photos and participant details remain in the authenticated page.
 export function footprintFeatures(points: PhotoPoint[]): FeatureCollection<Point> {
-  return { type: "FeatureCollection", features: points.map(p => ({ type: "Feature", id: p.id, properties: { id: p.id }, geometry: { type: "Point", coordinates: [p.lng, p.lat] } })) };
+  return { type: "FeatureCollection", features: points.map(p => ({ type: "Feature", id: p.id, properties: { id: p.id, colour: footprintColour(p.id) }, geometry: { type: "Point", coordinates: [p.lng, p.lat] } })) };
 }
 
 export function rangeFeatures(center: Coordinates | null, radius: number): FeatureCollection {

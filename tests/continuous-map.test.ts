@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
-import { continuousMapStyle, footprintFeatures, rangeFeatures, sampleFootprints } from "../src/lib/continuous-map";
+import { continuousMapStyle, footprintFeatures, footprintLayers, rangeFeatures, sampleFootprints } from "../src/lib/continuous-map";
 import { distanceKm } from "../src/lib/photo-domain";
 
 describe("continuous map prototype", () => {
   it("uses a valid vector globe style with locally generated labels", () => {
     const style = continuousMapStyle();
+    style.sources.footprints = { type: "geojson", data: footprintFeatures(sampleFootprints(2)), cluster: true };
+    style.layers.push(...footprintLayers());
     expect(validateStyleMin(style)).toEqual([]);
     expect(style.glyphs).toBeUndefined();
     expect(style.layers.some(l => l.type === "raster")).toBe(false);
@@ -14,7 +16,9 @@ describe("continuous map prototype", () => {
     const points = sampleFootprints(1);
     points[0] = { ...points[0], place: "private-place", participants: ["private-member"], assetId: "private-asset", takenOn: "2000-01-01" };
     const features = footprintFeatures(points);
-    expect(features.features[0].properties).toEqual({ id: points[0].id });
+    expect(Object.keys(features.features[0].properties!)).toEqual(["id", "colour"]);
+    expect(features.features[0].properties?.id).toBe(points[0].id);
+    expect(features.features[0].properties?.colour).toMatch(/^#[0-9a-f]{6}$/);
     expect(JSON.stringify(features)).not.toMatch(/private|2000-01-01/);
   });
   it.each([{ lat: 31, lng: 121 }, { lat: 1, lng: 179.99 }, { lat: 86, lng: -179 }])("keeps a 50km range on the globe and across the dateline at %j", center => {
