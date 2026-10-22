@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import sharp from "sharp";
+// Browser interaction tests do not depend on, or repeatedly download, public tiles.
+const mapTile = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cZ9sAAAAASUVORK5CYII=", "base64");
+test.beforeEach(async ({ page }) => {
+  await page.route("https://tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: mapTile }));
+});
 async function login(page: Page, second = false) {
   await page.goto("/login"); await page.getByLabel("邮箱", { exact: true }).fill(second ? "second@e2e.test" : "first@e2e.test");
   await page.getByLabel("密码", { exact: true }).fill("Test-only-password-2026");
@@ -87,6 +92,8 @@ test("上传重试与并发编辑保留草稿，地球无 WebGL 时仍可浏览�
   await page.goto("/travels"); await expect(page.locator(".earth-fallback")).toBeVisible();
   await page.locator(".footprint-locations summary").click(); await expect(page.getByRole("button", { name: /测试海边/ })).toBeVisible();
   await page.getByRole("button", { name: /测试海边/ }).click(); await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
+  await page.getByRole("button", { name: "详细地图", exact: true }).click();
+  await expect(page.getByRole("region", { name: /详细地图/ })).toBeVisible();
 });
 test("真实地球点选、圈选和 2000 点聚合；键盘与减少动态效果", async ({ page }) => {
   await login(page); await page.emulateMedia({ reducedMotion: "reduce" }); await page.goto("/travels");
@@ -96,6 +103,9 @@ test("真实地球点选、圈选和 2000 点聚合；键盘与减少动态效�
   await page.getByRole("button", { name: "圈选一片足迹", exact: true }).click(); await marker.click();
   await expect(page).toHaveURL(/lat=/); await page.getByLabel("范围半径（公里）").fill("1");
   await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
+  await expect(page.getByRole("region", { name: /详细地图/ })).toBeVisible();
+  await expect(page.locator(".street-range-circle")).toBeAttached();
+  await page.getByRole("button", { name: "返回地球", exact: true }).click();
   await expect(page.getByRole("button", { name: "开始旋转", exact: true })).toBeDisabled();
   await page.getByRole("region", { name: /互动地球/ }).focus(); await page.keyboard.press("ArrowRight"); await page.keyboard.press("+");
   const { points } = await (await page.request.get("/api/footprints")).json(), sample = points[0];
@@ -105,4 +115,52 @@ test("真实地球点选、圈选和 2000 点聚合；键盘与减少动态效�
   await expect(page.locator(".earth-marker").first()).toBeAttached({ timeout: 15_000 });
   expect(await page.locator(".earth-marker").count()).toBeLessThan(1000);
   await expect(page.locator(".earth-canvas canvas")).toBeVisible();
+});
+test("详细地图缩放至街道、照片点与圈选、键盘及移动布局，瓦片失败可重试", async ({ page }) => {
+  await login(page); await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/travels?lat=31.23&lng=121.47&radius=1");
+  const map = page.getByRole("region", { name: /详细地图/ });
+  await expect(map).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
+  await expect(page.locator(".street-map .earth-marker")).toHaveCount(1);
+  // Resizing must preserve the geographic center, not shift it by half the size delta.
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 980 });
+    await expect.poll(async () => {
+      const viewport = await map.boundingBox(), point = await page.locator(".street-range-circle + path").boundingBox();
+      if (!viewport || !point) return Infinity;
+      return Math.hypot(point.x + point.width / 2 - viewport.x - viewport.width / 2, point.y + point.height / 2 - viewport.y - viewport.height / 2);
+    }).toBeLessThan(3);
+  }
+  await page.locator(".street-map .earth-marker").click();
+  await expect(page.locator(".travel-panel-heading")).toContainText("在这里留下的故事");
+  await page.getByRole("button", { name: "圈选一片足迹", exact: true }).click();
+  await page.locator(".street-map .earth-marker").click();
+  await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
+  await expect(page.locator(".street-range-circle")).toBeAttached();
+  const initialZoom = Number(await map.getAttribute("data-zoom"));
+  await map.focus(); await page.keyboard.press("+"); await expect(map).toHaveAttribute("data-zoom", String(initialZoom + 1));
+  for (let z = initialZoom + 1; z < 19; z++) await page.getByRole("button", { name: "放大地图", exact: true }).click();
+  await expect(map).toHaveAttribute("data-zoom", "19");
+  await expect(page.getByRole("button", { name: "放大地图", exact: true })).toBeDisabled();
+  await expect(page.locator(".street-map-status")).toContainText("街道");
+  await page.getByLabel("范围半径（公里）").fill("0.1"); await expect(map).toHaveAttribute("data-zoom", "19");
+  await map.focus(); await page.keyboard.press("ArrowRight"); await page.keyboard.press("-"); await expect(map).toHaveAttribute("data-zoom", "18");
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 980 });
+    await expect(map).toBeVisible(); await expect(page.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.route("https://tile.openstreetmap.org/**", route => route.abort());
+  // A fresh viewport avoids testing an already decoded/cached tile.
+  await page.goto("/travels?lat=31.23&lng=121.47&radius=0.1");
+  await expect(page.locator(".street-map-error")).toBeVisible();
+  await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
+  await page.unroute("https://tile.openstreetmap.org/**");
+  await page.route("https://tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: mapTile }));
+  await page.getByRole("button", { name: "重试", exact: true }).click(); await expect(page.locator(".street-map-error")).toHaveCount(0);
+  await page.getByRole("button", { name: "返回地球", exact: true }).click();
+  await expect(page.getByRole("region", { name: /互动地球/ })).toBeVisible();
+  await expect(page.getByLabel("范围半径（公里）")).toHaveValue("0.1");
+  await page.getByRole("button", { name: "详细地图", exact: true }).click(); await expect(map).toBeVisible();
 });
