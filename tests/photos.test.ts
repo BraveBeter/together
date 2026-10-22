@@ -16,6 +16,7 @@ import { photoById, listPhotos, photoPoints, photoMoments, listTrips, photoExpor
 import { savePhotos, saveTrip, savePhotoComment, changePhotoTrash } from "../src/lib/photo-actions";
 import { uploadPhoto } from "../src/lib/photo-upload";
 import { distanceKm, circlePath, clusterPhotoPoints, gcjToWgs, photoDate, validCoordinates } from "../src/lib/photo-domain";
+import { streetClusterDegrees, streetCoordinates, streetViewFromGlobe } from "../src/lib/map-view";
 import { createBackup, restoreBackup } from "../src/lib/backup";
 import { GET as getPhotos, POST as queryPhotos } from "../src/app/api/photos/route";
 import { GET as getPoints } from "../src/app/api/footprints/route";
@@ -111,6 +112,17 @@ it("地球球面距离、聚合跨经线和极区，圈边界包含一致", () =
   const beijing = gcjToWgs({ lat: 39.908823, lng: 116.39747 }); expect(beijing.lat).toBeCloseTo(39.90742, 3); expect(beijing.lng).toBeCloseTo(116.39123, 3);
   expect(gcjToWgs({ lat: 51.5, lng: -.1 })).toEqual({ lat: 51.5, lng: -.1 });
   expect(photoDate("2024:02:29 23:59:59")).toBe("2024-02-29"); expect(photoDate("2023:02:29 00:00:00")).toBeNull(); expect(photoDate(undefined)).toBeNull();
+});
+it("街道级缩放展开相距十几米的照片，切换视图保留坐标并约束墨卡托极区", () => {
+  const point = (id: string, lat: number): PhotoPoint => ({ id, lat, lng: 121.47, assetId: id, takenOn: null, place: "", tripId: null, participants: [] });
+  const points = [point("near-a", 31.23), point("near-b", 31.23015)];
+  expect(clusterPhotoPoints(points, streetClusterDegrees(10, 31.23))).toHaveLength(1);
+  expect(clusterPhotoPoints(points, streetClusterDegrees(19, 31.23))).toHaveLength(2);
+  expect(clusterPhotoPoints([...points, point("same-place", 31.23)], streetClusterDegrees(19, 31.23)).map(c => c.count).sort()).toEqual([1, 2]);
+  const view = streetViewFromGlobe({ lat: 31.23, lng: 121.47, altitude: .18 }, 650);
+  expect(view.lat).toBe(31.23); expect(view.lng).toBeCloseTo(121.47); expect(view.zoom).toBeGreaterThanOrEqual(5);
+  expect(streetCoordinates({ lat: 90, lng: 540 })).toEqual({ lat: 85.0511, lng: -180 });
+  expect(streetCoordinates({ lat: -90, lng: -540 })).toEqual({ lat: -85.0511, lng: -180 });
 });
 it("完整备份恢复包含大图、评论、旅行与原始元数据；解散旅行不删照片", async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), "photo-restore-"));

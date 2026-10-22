@@ -1,0 +1,18 @@
+.street-map-stage{position:relative;isolation:isolate;width:100%;height:var(--map-height,650px);border:1px solid #46525266;border-radius:8px;overflow:hidden;background:#202728}
+.street-map{height:100%;width:100%;background:#202728;font-family:inherit;z-index:0;outline-offset:-4px}
+.street-map .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.86) saturate(.45)}
+.street-map .leaflet-control-attribution{background:#162023ed;color:#b8c3c3;font-size:10px;padding:3px 7px;line-height:1.5}
+.street-map .leaflet-control-attribution a{color:#d8dfd4;text-decoration:underline;text-underline-offset:2px}
+.street-map .leaflet-control-scale-line{background:#162023d9;color:#d1d9d5;border-color:#9eaeaa;text-shadow:none;font-size:10px;padding:2px 5px;line-height:1.4}
+.street-map .leaflet-bottom.leaflet-left{bottom:28px;pointer-events:none}
+.street-map .street-photo-icon{display:grid;place-items:center;background:transparent;border:0}
+.street-photo-icon>.earth-marker{position:relative;flex-shrink:0}
+.street-map .leaflet-interactive:focus{outline:none}
+.street-map-stage.picking .leaflet-container{cursor:crosshair}
+.street-map-stage .earth-controls{bottom:37px;right:12px;z-index:2}
+.street-map-stage .earth-pick-label{z-index:2;left:12px;top:12px;max-width:calc(100% - 140px);border-radius:5px;font-size:11px;padding:8px}
+.street-map-status{position:absolute;bottom:9px;left:12px;color:#b9c7c3;font-size:11px;line-height:1.5;pointer-events:none;z-index:2}
+.street-map-status span{color:#91a19c}
+.street-map-error{position:absolute;left:12px;right:12px;top:60px;font-size:12px;line-height:1.8;color:#e6cdb3;background:#273033f0;border:1px solid #716852;border-radius:5px;padding:10px 12px;z-index:2;display:flex;align-items:center;gap:12px}
+.street-map-error button{color:#ffe1b9;text-decoration:underline;white-space:nowrap;margin-left:auto;padding:4px}
+@media(max-width:600px){.street-map .leaflet-control-attribution{font-size:9px}.street-map-status{font-size:10px;bottom:27px}.street-map .leaflet-bottom.leaflet-left{bottom:44px}.street-map-stage .earth-controls{bottom:48px;right:9px}.street-map-stage .earth-pick-label{max-width:calc(100% - 127px);font-size:10px}.street-map-error{font-size:11px;top:56px;left:9px;right:9px}}

@@ -50,7 +50,7 @@ export function gcjToWgs(point: Coordinates): Coordinates {
 export type PhotoCluster = Coordinates & { id: string; points: PhotoPoint[]; count: number };
 export function clusterPhotoPoints(points: PhotoPoint[], degrees: number): PhotoCluster[] {
   // Bucket unit vectors rather than longitude so the poles and dateline join naturally.
-  const cell = Math.max(.00001, 2 * Math.sin(Math.max(.001, Math.min(30, degrees)) * radians / 2));
+  const cell = Math.max(.0000001, 2 * Math.sin(Math.max(.00001, Math.min(30, degrees)) * radians / 2));
   const buckets = new Map<string, { x: number; y: number; z: number; items: PhotoPoint[] }[]>();
   const clusters: { x: number; y: number; z: number; items: PhotoPoint[] }[] = [];
   for (const point of [...points].sort((a, b) => a.id.localeCompare(b.id))) {
