@@ -14,6 +14,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000 DAT
 RUN groupadd --system --gid 1001 tongye && useradd --system --uid 1001 --gid 1001 tongye
 COPY --from=build --chown=tongye:tongye /app/.next/standalone ./
 COPY --from=build --chown=tongye:tongye /app/.next/static ./.next/static
+COPY --from=build --chown=tongye:tongye /app/public ./public
 COPY --from=build --chown=tongye:tongye /app/node_modules ./node_modules
 COPY --from=build --chown=tongye:tongye /app/src ./src
 COPY --from=build --chown=tongye:tongye /app/scripts ./scripts

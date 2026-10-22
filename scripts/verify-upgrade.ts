@@ -17,6 +17,7 @@ async function main() {
     if (hasShared) tables.push("personal_records", "recommendations");
     if (database.prepare("SELECT name FROM sqlite_master WHERE name = ?").get("together_confirmations")) tables.push("together_confirmations");
     if (database.prepare("SELECT name FROM sqlite_master WHERE name = ?").get("import_batches")) tables.push("import_batches", "import_items");
+    if (database.prepare("SELECT name FROM sqlite_master WHERE name = ?").get("photos")) tables.push("photos", "photo_participants", "photo_comments", "trips");
     const columns = tables.map(table => (database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name).join(","));
     const before = tables.map(table => database.prepare(`SELECT * FROM ${table}`).all());
     migrateDatabase(database);

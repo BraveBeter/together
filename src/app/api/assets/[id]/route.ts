@@ -13,8 +13,9 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const asset = db.select().from(assets).where(eq(assets.id, id)).get();
   if (!asset) return new Response(null, { status: 404 });
   const full = new URL(request.url).searchParams.get("full") === "1";
+  const display = new URL(request.url).searchParams.get("size") === "display";
   try {
-    const data = await readFile(path.join(uploadsDir, id, full ? "original" : "thumb.webp"));
+    const data = await readFile(path.join(uploadsDir, id, full ? "original" : display ? "display.webp" : "thumb.webp"));
     return new Response(data, { headers: { "Content-Type": full ? asset.mime : "image/webp", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch { return new Response(null, { status: 404 }); }
 }

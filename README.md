@@ -201,3 +201,20 @@ node --import tsx scripts/import-list.ts --file /private/reviewed.json --owner-e
 中文标题使用自托管 **Noto Serif SC**（SIL Open Font License，许可证随字体包分发）。示例作品封面为程序生成的原创排版插图，不是官方海报。演示首页的山湖摄影由 [Jason Mavrommatis / Unsplash](https://unsplash.com/photos/river-surrounded-by-trees-near-mountain-elMz_DEwavA) 提供，仅用作视觉示例，不代表电影剧照或用户真实照片。
 
 本项目已提供可以本地运行的版本与自建服务器配置；公网 DNS、真实服务器和证书签发需要在部署环境中完成。
+
+## 照片墙与地球足迹（v4）
+
+- 照片墙和地球共用照片、参与者、评论与回收站。点击照片可补充资料或评论，评论仅作者可修改。
+- 单次最多 50 张，每张最多 25 MB、8000 万像素；支持静态 JPG、PNG、WebP、HEIC。原图、2560px 预览和 720px 缩略图均经会话鉴权读取。解码使用独立进程与单实例队列。
+- 自动读取 EXIF 拍摄日期、时区偏移和 GPS；未知日期保持空白。可以按照片或批量修改日期、位置、参与者及旅行，原始元数据独立保留。
+- 旅行可设置名称、简介、封面；日期范围按照片计算。解散只取消分组，照片和评论保留。
+- 地球使用本地 NASA 影像，无地图账户即可旋转、缩放、点击聚合点及圈选半径。无 WebGL 的设备可以使用下方地点列表。地图显示 WGS84 坐标。
+- 地点名称搜索使用高德 Web 服务 POI API。只在服务器环境设置 `AMAP_WEB_KEY`，不要加 `NEXT_PUBLIC_` 前缀。未配置时可使用照片 GPS、手动坐标或地球选点。密钥不要提交 Git。
+- 时光轴提供全部／电影／书籍／照片／旅行筛选，并保留我们／各成员分支。照片按拍摄日与旅行合并，带位置或旅行分组的照片可单独查看足迹，不重复生成事件。
+- 追加迁移 `0007_photos_travel.sql`；不清空任何旧数据。旧封面、头像及作品回忆照片不会自动进入照片墙。导出 v4 保留原有字段并增加照片、评论、参与者、旅行；完整备份 v2 包含私密预览，恢复兼容 v1。
+
+升级前备份并运行 `npm run test:upgrade`。优先使用项目 Dockerfile 构建 Linux 镜像；断网重用已有运行环境时，可将该镜像的原始 lock 文件传入 `BASE_LOCK_FILE`，用 `scripts/package-release.mjs` 打包。此路径只允许新增无需安装脚本的跨平台 JS/WASM 依赖，既有依赖变化或原生依赖变化必须完整构建 Linux 镜像。
+
+## 仓库隐私
+
+`.env`、本地数据、数据库、上传文件、备份、浏览器测试结果和含服务器信息的部署文件均排除在 Git 外。安装提交检查：`git config core.hooksPath .githooks`。检查脚本扫描暂存内容；可在被忽略的 `.local/privacy-denylist.json` 中维护需要拦截的私人字符串数组。不要把真实账号或样例个人照片添加到测试素材。

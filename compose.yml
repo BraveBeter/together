@@ -8,6 +8,7 @@ services:
       DATA_DIR: /app/data
       BACKUP_DIR: /app/backups
       ENABLE_DEMO_LOGIN: "false"
+      AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
     volumes:
       - ${HOST_DATA_DIR:-./data}:/app/data
       - ${HOST_BACKUP_DIR:-./backups}:/app/backups

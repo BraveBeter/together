@@ -19,15 +19,15 @@ export function Cover({ entry, className = "", full = false }: { entry: Pick<Ent
   return <div className={`cover cover-${entry.kind} palette-${palette} ${className}`}>
     {entry.coverId && !broken ? <img src={`/api/assets/${entry.coverId}${full ? "?full=1" : ""}`} alt={`${entry.title}封面`} onError={() => setBroken(true)} loading="lazy" /> : <div className="type-cover">
       <span className="cover-eyebrow">{entry.kind === "movie" ? "电影" : "书籍"}</span>
-      
+
       <strong>{entry.title}</strong>
       <span className="cover-creator">{entry.creator || ""}</span>
       <span className="cover-bottom">同页 · 私人收藏</span>
     </div>}
   </div>;
 }
-export function Modal({ open, onOpenChange, title, description, children, drawer = false }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode; drawer?: boolean }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="modal-overlay" /><Dialog.Content className={`modal ${drawer ? "drawer" : ""}`} onOpenAutoFocus={e => { if (window.innerWidth < 600) e.preventDefault(); }}>
+export function Modal({ open, onOpenChange, title, description, children, drawer = false, className = "" }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description?: string; children: ReactNode; drawer?: boolean; className?: string }) {
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="modal-overlay" /><Dialog.Content className={`modal ${drawer ? "drawer" : ""} ${className}`} onOpenAutoFocus={e => { if (window.innerWidth < 600) e.preventDefault(); }}>
     <div className="modal-heading"><div><Dialog.Title className="serif">{title}</Dialog.Title><Dialog.Description>{description || "为我们留下这一刻。"}</Dialog.Description></div><Dialog.Close className="icon-button" aria-label="关闭"><X size={20} /></Dialog.Close></div>
     {children}
   </Dialog.Content></Dialog.Portal></Dialog.Root>;
