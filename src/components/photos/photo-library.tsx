@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -22,6 +22,8 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
   const [epoch, setEpoch] = useState(0), [page, setPage] = useState<PhotoPage | null>(null), [busy, setBusy] = useState(true), [moreBusy, setMoreBusy] = useState(false), [error, setError] = useState("");
   const [upload, setUpload] = useState(false), [editor, setEditor] = useState<Photo[] | null>(null), [tripEditor, setTripEditor] = useState<Trip | "new" | null>(null), [selecting, setSelecting] = useState(false), [selection, setSelection] = useState<string[]>([]);
   const [points, setPoints] = useState<PhotoPoint[]>([]), [pointError, setPointError] = useState(""), [cluster, setCluster] = useState<PhotoCluster | null>(null), [picking, setPicking] = useState(false), [panelExpanded, setPanelExpanded] = useState(false);
+  const panel = useRef<HTMLElement>(null);
+  const pageRequest = useRef<AbortController | null>(null);
   const query = filterNames.flatMap(key => params.get(key) ? [[key, params.get(key)!]] : []), queryKey = new URLSearchParams([...query, ...(travel ? [["kind", "travel"]] : [])]).toString();
   const pointQuery = new URLSearchParams(query.filter(([key]) => !["lat", "lng", "radius", "unlocated", "trash"].includes(key))).toString();
   const photoId = params.get("photo") || initialPhoto;
@@ -33,13 +35,20 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
     window.history[push ? "pushState" : "replaceState"](null, "", `${path}${next.size ? `?${next}` : ""}`);
   }
   const clusterKey = cluster?.points.map(p => p.id).join(",") ?? "";
+  const hasCluster = cluster !== null;
   const readPage = useCallback(async (cursor: string | null, signal?: AbortSignal) => {
     const q = new URLSearchParams(queryKey); if (cursor) q.set("cursor", cursor);
-    const response = await fetch(`/api/photos?${q}`, { signal, ...(clusterKey ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: clusterKey.split(",") }) } : {}) });
+    const response = await fetch(`/api/photos?${q}`, { signal, ...(hasCluster ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: clusterKey ? clusterKey.split(",") : [] }) } : {}) });
     const result = await response.json(); if (!response.ok) throw new Error(result.error || "照片暂时无法读取。"); return result as PhotoPage;
-  }, [queryKey, clusterKey]);
+  }, [queryKey, clusterKey, hasCluster]);
+  useEffect(() => { setCluster(null); }, [pointQuery]);
   useEffect(() => {
-    const abort = new AbortController(); setBusy(true); setError(""); setSelection([]);
+    if (!prototype || !cluster || !matchMedia("(max-width: 600px)").matches) return;
+    const frame = requestAnimationFrame(() => panel.current?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
+    return () => cancelAnimationFrame(frame);
+  }, [cluster, prototype]);
+  useEffect(() => {
+    const abort = new AbortController(); pageRequest.current = abort; setBusy(true); setMoreBusy(false); setError(""); setSelection([]);
     const timer = setTimeout(() => { void readPage(null, abort.signal).then(result => { if (!abort.signal.aborted) setPage(result); }).catch(e => { if (!abort.signal.aborted) setError(e.message || "读取失败，请重试。"); }).finally(() => { if (!abort.signal.aborted) setBusy(false); }); }, 120);
     return () => { clearTimeout(timer); abort.abort(); };
   }, [readPage, epoch]);
@@ -60,7 +69,16 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
     const map = new Map<string, PhotoPoint[]>(); for (const point of points) { const key = point.place || `${point.lat.toFixed(2)}°, ${point.lng.toFixed(2)}°`; map.set(key, [...(map.get(key) ?? []), point]); }
     return [...map].sort((a, b) => b[1].length - a[1].length);
   }, [points]);
-  async function loadMore() { if (!page?.cursor || moreBusy) return; setMoreBusy(true); try { const next = await readPage(page.cursor); setPage(old => old ? { ...next, items: [...old.items, ...next.items.filter(p => !old.items.some(v => v.id === p.id))] } : next); } catch (e) { setError(e instanceof Error ? e.message : "读取失败"); } finally { setMoreBusy(false); } }
+  async function loadMore() {
+    const request = pageRequest.current;
+    if (!page?.cursor || busy || moreBusy || !request) return;
+    setMoreBusy(true);
+    try {
+      const next = await readPage(page.cursor, request.signal);
+      if (!request.signal.aborted) setPage(old => old ? { ...next, items: [...old.items, ...next.items.filter(p => !old.items.some(v => v.id === p.id))] } : next);
+    } catch (e) { if (!request.signal.aborted) setError(e instanceof Error ? e.message : "读取失败"); }
+    finally { if (!request.signal.aborted) setMoreBusy(false); }
+  }
   const openPhoto = (id: string) => patch({ photo: id }, !photoId);
   return <section className={`photo-library ${travel ? "travel-library" : ""} ${prototype ? "map-prototype-page" : ""}`}>
     {travel && <div className="map-prototype-banner">{prototype ? <><span>连续地图 · 本地体验</span><Link href="/travels">返回现有地图<ArrowRight size={14} /></Link></> : <Link href="/travels/prototype">体验从地球到街道的连续地图<ArrowRight size={14} /></Link>}</div>}
@@ -73,12 +91,12 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
     {params.get("date") && <div className="photo-active-filter">{params.get("date") === "undated" ? "日期未记" : params.get("date")}<button aria-label="清除日期筛选" onClick={() => patch({ date: null })}><X size={14} /></button></div>}
     {filteredTrip && <div className="selected-trip"><div><h2 className="serif">{filteredTrip.title}</h2>{filteredTrip.description && <p>{filteredTrip.description}</p>}<small>{dateLabel(filteredTrip.startedOn)}{filteredTrip.endedOn && filteredTrip.endedOn !== filteredTrip.startedOn ? ` — ${dateLabel(filteredTrip.endedOn)}` : ""} · {filteredTrip.photoCount} 张</small></div><button className="text-link" onClick={() => setTripEditor(filteredTrip)}><Edit3 size={14} />编辑旅行</button></div>}
     <ErrorNotice text={error || pointError} />
-    {travel && <div className="travel-layout"><div className="travel-globe"><TravelMap points={points} center={center} radius={radius} picking={picking} onPick={pick} onSelect={selectCluster} />
+    {travel && <div className="travel-layout"><div className="travel-globe"><TravelMap points={points} center={center} radius={radius} picking={picking} selection={cluster} onPick={pick} onSelect={selectCluster} onClearSelection={clearArea} />
       <div className="area-controls"><Button variant={picking ? "primary" : "secondary"} onClick={() => { setPicking(v => !v); setCluster(null); }}><Crosshair size={16} />{picking ? "正在圈选" : "圈选一片足迹"}</Button>{(center || cluster) && <button className="text-link" onClick={clearArea}>清除选择</button>}
         {center && <label className="radius-control">范围半径<input aria-label="范围半径滑杆" type="range" min={-1} max={4} step={.025} value={Math.log10(radius)} onChange={e => patch({ radius: (10 ** Number(e.target.value)).toFixed(1) })} /><input type="number" aria-label="范围半径（公里）" min={.1} max={10000} step={.1} value={radius} onChange={e => { const n = Number(e.target.value); if (n >= .1 && n <= 10000) patch({ radius: String(n) }); }} />公里</label>}
-      </div><p className="travel-help">{prototype ? "滚轮或双指连续缩放，拖动探索；点击光点查看照片。地图聚焦后，也可用方向键移动、＋／－缩放。" : "滚轮或双指放大，从地球走进街道；也可直接打开详细地图。点击光点查看照片，圈选一片范围重温回忆。"}</p></div>
-      <aside className={`travel-photo-panel ${panelExpanded ? "expanded" : ""}`}><button className="panel-handle" onClick={() => setPanelExpanded(v => !v)} aria-expanded={panelExpanded}>{cluster ? `${cluster.count} 张照片` : center ? `半径 ${radius.toFixed(1)} 公里` : "沿途的片刻"}<span>{panelExpanded ? "收起" : "展开"}</span></button>
-        <div className="travel-panel-content"><div className="travel-panel-heading"><h2 className="serif">{cluster ? "在这里留下的故事" : center ? "这一圈的回忆" : "沿途的片刻"}</h2><small>{page?.total ?? 0} 张照片</small></div>
+      </div><p className="travel-help">{prototype ? "移动圆圈，点击查看圈内全部照片；手机轻点地图即可圈选。缩放调整覆盖范围，拖动继续探索。地图聚焦后，回车圈选中心，Esc 清除选择。" : "滚轮或双指放大，从地球走进街道；也可直接打开详细地图。点击光点查看照片，圈选一片范围重温回忆。"}</p></div>
+      <aside ref={panel} className={`travel-photo-panel ${panelExpanded ? "expanded" : ""}`}><button className="panel-handle" onClick={() => setPanelExpanded(v => !v)} aria-expanded={panelExpanded}>{cluster ? `${busy ? cluster.count : page?.total ?? 0} 张照片` : center ? `半径 ${radius.toFixed(1)} 公里` : "沿途的片刻"}<span>{panelExpanded ? "收起" : "展开"}</span></button>
+        <div className="travel-panel-content"><div className="travel-panel-heading"><h2 className="serif">{cluster?.id.startsWith("screen-circle-") || center ? "这一圈的回忆" : cluster ? "在这里留下的故事" : "沿途的片刻"}</h2><small>{busy ? "正在整理…" : `${page?.total ?? 0} 张照片`}</small></div>
         {busy ? <div className="photo-loading" role="status">正在寻找照片…</div> : page?.items.length ? <div className="travel-thumbnails">{page.items.map(p => <button key={p.id} onClick={() => openPhoto(p.id)} aria-label={`查看照片 ${p.caption || p.place || dateLabel(p.takenOn)}`}><img src={`/api/assets/${p.assetId}`} alt={p.caption || p.place || "旅途照片"} loading="lazy" /><span>{p.place || dateLabel(p.takenOn)}</span></button>)}</div> : <div className="photo-quiet-empty"><MapPin size={26} /><p>{center || cluster ? "这一片还没有照片，试着扩大范围。" : "上传有 GPS 的照片，点亮第一个地方。"}</p><button className="text-link" onClick={() => setUpload(true)}>添加照片<ArrowRight size={14} /></button></div>}
         {page?.cursor && <Button variant="ghost" busy={moreBusy} onClick={() => void loadMore()}>加载更多照片</Button>}</div>
       </aside></div>}

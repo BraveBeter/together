@@ -9,9 +9,12 @@
 .continuous-map .maplibregl-ctrl-scale{background:#17252de0;border-color:#81908c;color:#d5dfd8;font-size:11px;border-radius:0 0 3px 3px}
 .continuous-map .maplibregl-ctrl-attrib{font-size:10px;background:#f4f3edeb;color:#26332d}
 .continuous-map .maplibregl-ctrl-attrib a{color:#26332d}
-.continuous-map .photo-dot-tooltip{pointer-events:none;z-index:3}
-.continuous-map .photo-dot-tooltip .maplibregl-popup-content{padding:9px 12px;background:#18262bf2;border:1px solid #5d737380;border-radius:7px;box-shadow:0 4px 18px #0003;color:#dee6df;font:12px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;white-space:pre-line}
-.continuous-map .photo-dot-tooltip .maplibregl-popup-tip{display:none}
+.map-circle-cursor{--circle-radius:44px;position:absolute;top:0;left:0;z-index:3;pointer-events:none;width:calc(var(--circle-radius)*2);height:calc(var(--circle-radius)*2);margin:calc(var(--circle-radius)*-1);border:1.5px solid #a3cfe6;border-radius:50%;background:#91c7df0b;box-shadow:0 0 0 1px #15313f80,inset 0 0 18px #8abfd50d;will-change:transform}
+.map-circle-cursor[hidden]{display:none}
+.map-circle-cursor::after{content:"";position:absolute;top:50%;left:50%;width:3px;height:3px;background:#d4e9ef;border-radius:50%;transform:translate(-50%,-50%)}
+.map-circle-cursor span{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);padding:4px 9px;border:1px solid #7193a340;background:#14262ef2;border-radius:5px;white-space:nowrap;color:#d4e6eb;font-size:11px;line-height:1.7}
+.map-selection-status{position:absolute;top:72px;left:16px;right:70px;width:fit-content;max-width:calc(100% - 86px);padding:7px 11px;border:1px solid #749aa54d;border-radius:6px;background:#172b34ed;color:#d4e6eb;font-size:12px;line-height:1.7;pointer-events:none}
+.map-prototype-page .travel-photo-panel{scroll-margin-top:85px}
 .map-flight-bar{position:absolute;top:16px;left:16px;display:flex;background:#18272df5;border:1px solid #526166;border-radius:8px;box-shadow:0 4px 20px #0002;overflow:hidden}
 .map-flight-bar button{font-size:13px;color:#e1e8e2;min-width:58px;min-height:40px;padding:8px 12px}
 .map-flight-bar button+button{border-left:1px solid #3c4a4f}
