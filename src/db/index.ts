@@ -1,0 +1,20 @@
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { dataDir } from "../lib/config";
+import * as schema from "./schema";
+import { migrateDatabase } from "./migrate";
+
+mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+const globalDB = globalThis as unknown as { tongyeDB?: Database.Database };
+export const sqlite = globalDB.tongyeDB ?? new Database(path.join(dataDir, "journal.sqlite"));
+if (process.env.NODE_ENV !== "production") globalDB.tongyeDB = sqlite;
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
+sqlite.pragma("busy_timeout = 5000");
+migrateDatabase(sqlite);
+sqlite.prepare("INSERT OR IGNORE INTO settings VALUES ('home', '同页', '把一起度过的时光，慢慢收藏。', 0)").run();
+sqlite.prepare("INSERT OR IGNORE INTO challenges VALUES ('movies-100','movie','一起看 100 部电影',100,NULL)").run();
+sqlite.prepare("INSERT OR IGNORE INTO challenges VALUES ('books-100','book','一起读 100 本书',100,NULL)").run();
+export const db = drizzle(sqlite, { schema });

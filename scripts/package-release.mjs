@@ -1,0 +1,12 @@
+import { cpSync, mkdirSync, existsSync } from 'node:fs';
+import path from 'node:path';
+const target = path.resolve(process.argv[2] || '.local/deploy/image-v3');
+if (existsSync(target)) throw new Error('Use a new output directory; existing artifacts are never overwritten.');
+if (!existsSync('.next-build/standalone/server.js')) throw new Error('Build with NEXT_DIST_DIR=.next-build first.');
+mkdirSync(target, { recursive: true, verbatimSymlinks: true });
+cpSync('.next-build/standalone/.next-build', path.join(target,'build'), { recursive: true, verbatimSymlinks: true });
+cpSync('.next-build/static', path.join(target,'build/static'), { recursive: true, verbatimSymlinks: true });
+cpSync('.next-build/standalone/server.js', path.join(target,'server.js'));
+for (const item of ['src','scripts','migrations','package.json','tsconfig.json']) cpSync(item,path.join(target,item),{recursive:true,verbatimSymlinks:true});
+cpSync('deploy/Dockerfile.cached-runtime',path.join(target,'Dockerfile'));
+console.log('Packaged application-only release (no local data, credentials or macOS native modules): '+target);

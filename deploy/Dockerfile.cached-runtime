@@ -1,0 +1,16 @@
+# Offline release path when the registry is unavailable and dependencies are unchanged.
+# Context is prepared by scripts/package-release.mjs from a production .next-build build.
+ARG RUNTIME_IMAGE=tongye:2026-10-19-01
+FROM ${RUNTIME_IMAGE}
+USER root
+COPY --chown=1001:1001 package.json /tmp/release-package.json
+RUN node -e "require('node:assert/strict').deepEqual(require('/app/package.json').dependencies,require('/tmp/release-package.json').dependencies)"
+RUN rm -rf /app/.next /app/.next-build /app/src /app/scripts /app/migrations
+COPY --chown=1001:1001 build/ /app/.next-build/
+COPY --chown=1001:1001 server.js package.json tsconfig.json /app/
+COPY --chown=1001:1001 src/ /app/src/
+COPY --chown=1001:1001 scripts/ /app/scripts/
+COPY --chown=1001:1001 migrations/ /app/migrations/
+WORKDIR /app
+USER 1001:1001
+CMD ["node", "server.js"]

@@ -1,0 +1,1 @@
+export default function Loading() { return <div className="loading-page"><div className="brand serif">同页<span className="brand-mark">◒</span></div><div className="loading-line" /><p>翻开这一页…</p></div>; }

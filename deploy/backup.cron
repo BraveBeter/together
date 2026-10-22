@@ -1,0 +1,4 @@
+# Install with crontab -e; replace /opt/tongye with the checkout directory.
+# This schedule uses the server's timezone. Set the server to Asia/Shanghai
+# if you want 03:15 Beijing time. Logs contain filenames, never credentials.
+15 3 * * * cd /opt/tongye && docker compose exec -T app npm run backup >> /opt/tongye/backups/backup.log 2>&1

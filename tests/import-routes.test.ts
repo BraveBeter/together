@@ -1,0 +1,21 @@
+import { randomUUID } from "node:crypto";
+import { expect, it, vi } from "vitest";
+import type { Member } from "../src/lib/types";
+let member: Member | null = null;
+vi.mock("../src/lib/session", () => ({ currentMember: async () => member }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+import { GET, POST } from "../src/app/api/imports/route";
+const url = "http://localhost:3011/api/imports";
+const request = (body: unknown, origin = "http://localhost:3011") => new Request(url, { method: "POST", headers: { Origin: origin }, body: JSON.stringify(body) });
+it("批量接口拒绝未登录、跨站、越权身份字段、非法状态和任意信源地址", async () => {
+  expect((await GET(new Request(url))).status).toBe(401);
+  expect((await POST(request({}))).status).toBe(401);
+  member = { id: "member", email: "member@test.invalid", name: "成员", seat: 0, avatarId: null, color: "green" };
+  expect((await POST(request({}, "https://other.invalid"))).status).toBe(403);
+  const input = { title: "电影", year: 2014, creator: "", isbn: "", status: "in_progress", startedOn: null, completedOn: null };
+  const create = { op: "create", id: randomUUID(), kind: "movie", label: "片单", inputs: [input] };
+  expect((await POST(request(create))).status).toBe(400);
+  expect((await POST(request({ ...create, userId: "another-member" }))).status).toBe(400);
+  expect((await POST(request({ op: "choose", batchId: randomUUID(), itemId: randomUUID(), revision: 1, ref: { source: "http://127.0.0.1", kind: "movie", id: "abc" } }))).status).toBe(400);
+  expect((await POST(new Request(url, { method: "POST", headers: { Origin: "http://localhost:3011" }, body: "bad json" }))).status).toBe(400);
+});

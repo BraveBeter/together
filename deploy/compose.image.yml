@@ -1,0 +1,7 @@
+# Run a prebuilt image on hosts where building or pulling from a registry is slow.
+# Use together with compose.yml through deploy/manage.sh.
+services:
+  app:
+    image: ${TONGYE_IMAGE:?Set TONGYE_IMAGE in .env}
+  caddy:
+    image: ${CADDY_IMAGE:-caddy:2-alpine}

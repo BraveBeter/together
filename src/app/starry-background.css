@@ -1,0 +1,32 @@
+/* A decorative layer only: it never participates in layout or receives input. */
+body {
+  isolation: isolate;
+}
+
+.starry-background {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+  background:
+    radial-gradient(ellipse at 84% 12%, #5b608416, transparent 48%),
+    radial-gradient(ellipse at 14% 85%, #69525f0d, transparent 43%);
+}
+
+.starry-background canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.login-page {
+  background: transparent;
+}
+
+@media print {
+  .starry-background {
+    display: none;
+  }
+}
