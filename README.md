@@ -216,6 +216,16 @@ node --import tsx scripts/import-list.ts --file /private/reviewed.json --owner-e
 
 升级前备份并运行 `npm run test:upgrade`。优先使用项目 Dockerfile 构建 Linux 镜像；断网重用已有运行环境时，可将该镜像的原始 lock 文件传入 `BASE_LOCK_FILE`，用 `scripts/package-release.mjs` 打包。此路径只允许新增无需安装脚本的跨平台 JS/WASM 依赖，既有依赖变化或原生依赖变化必须完整构建 Linux 镜像。
 
+### 连续地图原型
+
+登录后访问 `/travels/prototype`；`/travels` 保留现有地图，可从顶部入口对比体验。原型只增加展示方式，没有数据库迁移或内容重置，也不更换照片、评论、筛选和圈选接口。
+
+使用 [MapLibre GL JS 6](https://maplibre.org/maplibre-gl-js/docs/) 的原生 globe 投影，在一个 WebGL 画布中连续缩放到街道。底图为 [OpenFreeMap](https://openfreemap.org/quick_start/) 的 OpenMapTiles 矢量数据，无需密钥；保留地图署名，中文标签使用本机字体。底图是在线服务，初次访问或进入未缓存地区需要网络；不同地区的道路、地名完整度由信源决定。
+
+照片点由 worker 聚合并通过 GPU 图层绘制，点击后复用已有照片面板，缩放时不加载照片纹理；底图服务不会收到照片 ID、图片、评论或高德密钥。拖动期间暂停背景动画，渲染像素比上限为 2，地图静止后不主动循环重绘。可滚轮／双指缩放、方向键移动、加减键缩放；圈选时按回车选择当前地图中心。展开大图后按 Escape 返回。
+
+右下角“体验选项”可临时显示 2,000／10,000 个模拟点，并查看最近操作的渲染帧率和 95% 帧间隔。模拟点不保存、不生成照片或时光轴记录；帧率仅代表当前浏览器、设备及该次操作，不能替代真机体验。原型仍需体验确认，再替换正式入口、发布服务器和合并主分支。
+
 ## 仓库隐私
 
 `.env`、本地数据、数据库、上传文件、备份、浏览器测试结果和含服务器信息的部署文件均排除在 Git 外。安装提交检查：`git config core.hooksPath .githooks`。检查脚本扫描暂存内容；可在被忽略的 `.local/privacy-denylist.json` 中维护需要拦截的私人字符串数组。不要把真实账号或样例个人照片添加到测试素材。
