@@ -14,7 +14,7 @@ it("多个构建进程首次打开同一数据库时，迁移只执行一次", a
     const code = `const Database = require('better-sqlite3'); const { migrateDatabase } = require('./src/db/migrate.ts'); const db = new Database(process.argv[1]); db.pragma('busy_timeout=10000'); migrateDatabase(db); db.close();`;
     await Promise.all(Array.from({ length: 4 }, () => promisify(execFile)(process.execPath, ["--import", "tsx", "-e", code, path.join(directory, "journal.sqlite")])));
     const result = new Database(path.join(directory, "journal.sqlite"), { readonly: true });
-    try { expect(result.prepare("SELECT COUNT(*) AS n FROM _migrations").get()).toEqual({ n: 6 }); expect(result.pragma("integrity_check", { simple: true })).toBe("ok"); } finally { result.close(); }
+    try { expect(result.prepare("SELECT COUNT(*) AS n FROM _migrations").get()).toEqual({ n: 7 }); expect(result.pragma("integrity_check", { simple: true })).toBe("ok"); } finally { result.close(); }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -48,7 +48,7 @@ it("旧数据库在线快照恢复后追加迁移，内容、完成时间、参�
       expect(restored.prepare("SELECT id,shared_added_at,deleted_at FROM entries ORDER BY created_at").all()).toEqual([{ id: "m", shared_added_at: 10, deleted_at: null }, { id: "b", shared_added_at: 11, deleted_at: null }, { id: "trash", shared_added_at: 12, deleted_at: 30 }]);
       expect(restored.prepare("SELECT COUNT(*) AS n FROM entries e JOIN movies m ON m.entry_id=e.id JOIN challenge_entries c ON c.entry_id=e.id WHERE e.shared_added_at IS NOT NULL AND e.deleted_at IS NULL AND m.status='completed'").get()).toEqual({ n: 1 });
       expect(restored.prepare("SELECT * FROM personal_records").all()).toEqual([]);
-      migrateDatabase(restored); expect(restored.prepare("SELECT COUNT(*) AS n FROM _migrations").get()).toEqual({ n: 6 });
+      migrateDatabase(restored); expect(restored.prepare("SELECT COUNT(*) AS n FROM _migrations").get()).toEqual({ n: 7 });
       expect(restored.pragma("foreign_key_check")).toEqual([]); expect(restored.pragma("integrity_check", { simple: true })).toBe("ok");
     } finally { restored.close(); }
     expect((legacy.prepare("PRAGMA table_info(entries)").all() as { name: string }[]).some(c => c.name === "shared_added_at")).toBe(false);

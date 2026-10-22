@@ -82,3 +82,25 @@ export const togetherConfirmations = sqliteTable("together_confirmations", {
   completedOn: text("completed_on"), recordedBy: text("recorded_by").notNull().references(() => user.id),
   createdAt: integer("created_at").notNull(), revision: integer("revision").notNull().default(1), revokedAt: integer("revoked_at"),
 });
+
+// Photos remain independent from book/movie entries and reuse private assets.
+export const trips = sqliteTable("trips", {
+  id: text("id").primaryKey(), title: text("title").notNull(), description: text("description").notNull().default(""),
+  coverPhotoId: text("cover_photo_id"), createdBy: text("created_by").notNull().references(() => user.id),
+  revision: integer("revision").notNull().default(1), createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(), deletedAt: integer("deleted_at"),
+});
+export const photos = sqliteTable("photos", {
+  id: text("id").primaryKey(), assetId: text("asset_id").notNull().unique().references(() => assets.id), contentHash: text("content_hash").notNull().unique(),
+  caption: text("caption").notNull().default(""), width: integer("width").notNull(), height: integer("height").notNull(), takenOn: text("taken_on"),
+  originalMetadata: text("original_metadata", { mode: "json" }).$type<import("../lib/photo-types").OriginalPhotoMetadata>().notNull(),
+  latitude: real("latitude"), longitude: real("longitude"), place: text("place").notNull().default(""), locationSource: text("location_source").$type<"exif" | "manual" | "amap">(),
+  tripId: text("trip_id").references(() => trips.id), uploadedBy: text("uploaded_by").notNull().references(() => user.id),
+  revision: integer("revision").notNull().default(1), createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(), deletedAt: integer("deleted_at"),
+});
+export const photoParticipants = sqliteTable("photo_participants", {
+  photoId: text("photo_id").notNull().references(() => photos.id), userId: text("user_id").notNull().references(() => members.userId),
+}, t => [uniqueIndex("photo_participants_unique").on(t.photoId, t.userId)]);
+export const photoComments = sqliteTable("photo_comments", {
+  id: text("id").primaryKey(), photoId: text("photo_id").notNull().references(() => photos.id), authorId: text("author_id").notNull().references(() => members.userId),
+  body: text("body").notNull(), revision: integer("revision").notNull().default(1), createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(), deletedAt: integer("deleted_at"),
+});

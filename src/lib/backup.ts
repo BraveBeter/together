@@ -12,16 +12,17 @@ export async function createBackup(destination: string) {
   const { sqlite } = await import("../db");
   await mkdir(destination, { recursive: true, mode: 0o700 });
   const temp = await mkdtemp(path.join(os.tmpdir(), "tongye-backup-"));
-  const archive = new JSZip(); const manifest: { version: number; createdAt: string; files: Record<string, string> } = { version: 1, createdAt: new Date().toISOString(), files: {} };
+  const archive = new JSZip(); const manifest: { version: number; createdAt: string; files: Record<string, string> } = { version: 2, createdAt: new Date().toISOString(), files: {} };
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const target = path.join(destination, `tongye-${stamp}.zip`); const pending = `${target}.partial`;
   try {
     const snapshot = path.join(temp, "journal.sqlite"); await sqlite.backup(snapshot);
     const source = new Database(snapshot, { readonly: true, fileMustExist: true });
-    let assets: { id: string }[];
-    try { assets = source.prepare("SELECT id FROM assets").all() as { id: string }[]; } finally { source.close(); }
+    let assets: { id: string }[]; let photoAssets = new Set<string>();
+    try { assets = source.prepare("SELECT id FROM assets").all() as { id: string }[];
+      if (source.prepare("SELECT 1 FROM sqlite_master WHERE name='photos'").get()) photoAssets = new Set((source.prepare("SELECT asset_id FROM photos").all() as { asset_id: string }[]).map(p => p.asset_id)); } finally { source.close(); }
     const files: [string, string][] = [["journal.sqlite", snapshot]];
-    for (const asset of assets) for (const file of ["original", "thumb.webp"]) files.push([`uploads/${asset.id}/${file}`, path.join(dataDir, "uploads", asset.id, file)]);
+    for (const asset of assets) for (const file of ["original", "thumb.webp", ...(photoAssets.has(asset.id) ? ["display.webp"] : [])]) files.push([`uploads/${asset.id}/${file}`, path.join(dataDir, "uploads", asset.id, file)]);
     // Media files are immutable and are never automatically removed, so the DB
     // snapshot's references remain readable even while new uploads are added.
     for (const [name, file] of files) { manifest.files[name] = await hashFile(file); archive.file(name, createReadStream(file)); }
@@ -40,11 +41,11 @@ export async function restoreBackup(archivePath: string, destination: string) {
   const zip = await JSZip.loadAsync(await readFile(archivePath), { checkCRC32: true });
   const manifestFile = zip.file("manifest.json"); if (!manifestFile) throw new Error("不是同页备份：缺少清单。");
   const manifest = JSON.parse(await manifestFile.async("string")) as { version: number; files: Record<string, string> };
-  if (manifest.version !== 1 || !manifest.files?.["journal.sqlite"]) throw new Error("不支持的备份格式。");
+  if (![1, 2].includes(manifest.version) || !manifest.files?.["journal.sqlite"]) throw new Error("不支持的备份格式。");
   const stage = `${target}.restore-${randomUUID()}`; await mkdir(stage, { recursive: true, mode: 0o700 });
   try {
     for (const [name, hash] of Object.entries(manifest.files)) {
-      if (name !== "journal.sqlite" && !/^uploads\/[0-9a-f-]{36}\/(original|thumb\.webp)$/.test(name)) throw new Error("备份包含不安全的路径。");
+      if (name !== "journal.sqlite" && !/^uploads\/[0-9a-f-]{36}\/(original|thumb\.webp|display\.webp)$/.test(name)) throw new Error("备份包含不安全的路径。");
       const file = zip.file(name); if (!file) throw new Error(`备份缺少文件：${name}`);
       const bytes = await file.async("nodebuffer");
       if (createHash("sha256").update(bytes).digest("hex") !== hash) throw new Error(`文件校验失败：${name}`);
@@ -54,6 +55,7 @@ export async function restoreBackup(archivePath: string, destination: string) {
     try {
       if (check.pragma("integrity_check", { simple: true }) !== "ok" || (check.pragma("foreign_key_check") as unknown[]).length) throw new Error("数据库完整性检查失败。");
       for (const row of check.prepare("SELECT id FROM assets").all() as { id: string }[]) for (const filename of ["original", "thumb.webp"]) if (!manifest.files[`uploads/${row.id}/${filename}`]) throw new Error("备份缺少数据库引用的图片。");
+      if (check.prepare("SELECT 1 FROM sqlite_master WHERE name='photos'").get()) for (const row of check.prepare("SELECT asset_id FROM photos").all() as { asset_id: string }[]) if (!manifest.files[`uploads/${row.asset_id}/display.webp`]) throw new Error("备份缺少照片的大图。");
     } finally { check.close(); }
     await rename(stage, target); return target;
   } catch (e) { await rm(stage, { recursive: true, force: true }); throw e; }

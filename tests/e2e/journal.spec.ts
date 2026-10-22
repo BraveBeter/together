@@ -49,7 +49,7 @@ test("双账户严格交集、共同确认、个人日期、回忆、移除恢�
   await page.goto("/challenges/books-100"); await expect(page.locator(".challenge-detail .challenge-numbers strong")).toHaveText("00");
   await page.goto("/trash"); await page.getByRole("button", { name: "恢复", exact: true }).click(); await expect(page.locator(".trash-item")).toHaveCount(0);
   await page.goto("/challenges/books-100"); await expect(page.locator(".challenge-detail .challenge-numbers strong")).toHaveText("01");
-  const exported = await page.request.get("/api/export"); const zip = await JSZip.loadAsync(await exported.body()); const json = JSON.parse(await zip.file("journal.json")!.async("string")); expect(json.version).toBe(3); expect(json.togetherConfirmations).toHaveLength(1); expect(json.personalRecords).toHaveLength(2); expect(JSON.stringify(json)).not.toContain("password");
+  const exported = await page.request.get("/api/export"); const zip = await JSZip.loadAsync(await exported.body()); const json = JSON.parse(await zip.file("journal.json")!.async("string")); expect(json.version).toBe(4); expect(json.togetherConfirmations).toHaveLength(1); expect(json.personalRecords).toHaveLength(2); expect(JSON.stringify(json)).not.toContain("password");
   await secondContext.close(); await guest.close();
 });
 
