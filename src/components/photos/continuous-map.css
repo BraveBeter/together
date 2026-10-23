@@ -14,7 +14,7 @@
 .map-circle-cursor::after{content:"";position:absolute;top:50%;left:50%;width:3px;height:3px;background:#d4e9ef;border-radius:50%;transform:translate(-50%,-50%)}
 .map-circle-cursor span{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);padding:4px 9px;border:1px solid #7193a340;background:#14262ef2;border-radius:5px;white-space:nowrap;color:#d4e6eb;font-size:11px;line-height:1.7}
 .map-selection-status{position:absolute;top:72px;left:16px;right:70px;width:fit-content;max-width:calc(100% - 86px);padding:7px 11px;border:1px solid #749aa54d;border-radius:6px;background:#172b34ed;color:#d4e6eb;font-size:12px;line-height:1.7;pointer-events:none}
-.map-prototype-page .travel-photo-panel{scroll-margin-top:85px}
+.continuous-map-page .travel-photo-panel{scroll-margin-top:85px}
 .map-flight-bar{position:absolute;top:16px;left:16px;display:flex;background:#18272df5;border:1px solid #526166;border-radius:8px;box-shadow:0 4px 20px #0002;overflow:hidden}
 .map-flight-bar button{font-size:13px;color:#e1e8e2;min-width:58px;min-height:40px;padding:8px 12px}
 .map-flight-bar button+button{border-left:1px solid #3c4a4f}
@@ -36,7 +36,7 @@
 .continuous-map.map-expanded{position:fixed;inset:12px;z-index:100;height:auto;border-radius:12px}
 .continuous-map button:focus-visible,.continuous-map summary:focus-visible,.continuous-map select:focus-visible{outline:2px solid #f1d39a;outline-offset:-3px}
 .continuous-map button:disabled{opacity:.5;cursor:wait}
-@media(min-width:1000px){.map-prototype-page .travel-layout{grid-template-columns:minmax(0,1fr) 260px}}
+@media(min-width:1000px){.continuous-map-page .travel-layout{grid-template-columns:minmax(0,1fr) 260px}}
 @media(max-width:800px){.continuous-map{height:560px}.map-flight-bar button{min-width:48px;padding:8px}.map-flight-bar{left:12px;top:12px}.map-secondary-controls{top:12px;right:12px;gap:6px}}
 @media(max-width:600px){.continuous-map{height:520px;margin-left:-5px;margin-right:-5px;border-radius:9px}.map-prototype-banner{font-size:12px;gap:10px}.map-prototype-banner span{max-width:50%}.map-flight-bar button{font-size:12px;min-width:42px;padding:8px 6px}.map-secondary-controls button{width:36px;height:40px}.map-secondary-controls{gap:5px}.continuous-map .maplibregl-ctrl-top-right{right:2px;top:62px}.continuous-map.map-expanded{inset:6px 6px calc(6px + env(safe-area-inset-bottom));margin:0}.map-prototype-checks select{font-size:16px}.map-scale-label{font-size:11px;bottom:44px}.map-prototype-checks{bottom:85px}}
 @media(prefers-reduced-motion:reduce){.continuous-map *{scroll-behavior:auto;transition:none!important;animation:none!important}}

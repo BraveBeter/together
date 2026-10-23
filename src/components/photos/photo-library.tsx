@@ -13,12 +13,10 @@ import { Button, ErrorNotice } from "../ui";
 import { PhotoDetail } from "./photo-detail";
 import { PhotoEditor, TripEditor } from "./photo-editor";
 import { PhotoUpload } from "./photo-upload";
-const Earth = dynamic(() => import("./earth").then(m => m.Earth), { ssr: false, loading: () => <div className="earth-placeholder">正在展开地球…</div> });
 const ContinuousMap = dynamic(() => import("./continuous-map").then(m => m.ContinuousMap), { ssr: false, loading: () => <div className="earth-placeholder">正在展开连续地图…</div> });
 const filterNames = ["view", "year", "trip", "date", "unlocated", "trash", "lat", "lng", "radius"];
 export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = false }: { data: JournalData; travel?: boolean; initialPhoto?: string; prototype?: boolean }) {
   const params = useSearchParams(), router = useRouter(), path = travel ? prototype ? "/travels/prototype" : "/travels" : "/photos";
-  const TravelMap = prototype ? ContinuousMap : Earth;
   const [epoch, setEpoch] = useState(0), [page, setPage] = useState<PhotoPage | null>(null), [busy, setBusy] = useState(true), [moreBusy, setMoreBusy] = useState(false), [error, setError] = useState("");
   const [upload, setUpload] = useState(false), [editor, setEditor] = useState<Photo[] | null>(null), [tripEditor, setTripEditor] = useState<Trip | "new" | null>(null), [selecting, setSelecting] = useState(false), [selection, setSelection] = useState<string[]>([]);
   const [points, setPoints] = useState<PhotoPoint[]>([]), [pointError, setPointError] = useState(""), [cluster, setCluster] = useState<PhotoCluster | null>(null), [picking, setPicking] = useState(false), [panelExpanded, setPanelExpanded] = useState(false);
@@ -43,10 +41,10 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
   }, [queryKey, clusterKey, hasCluster]);
   useEffect(() => { setCluster(null); }, [pointQuery]);
   useEffect(() => {
-    if (!prototype || !cluster || !matchMedia("(max-width: 600px)").matches) return;
+    if (!travel || !cluster || !matchMedia("(max-width: 600px)").matches) return;
     const frame = requestAnimationFrame(() => panel.current?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" }));
     return () => cancelAnimationFrame(frame);
-  }, [cluster, prototype]);
+  }, [cluster, travel]);
   useEffect(() => {
     const abort = new AbortController(); pageRequest.current = abort; setBusy(true); setMoreBusy(false); setError(""); setSelection([]);
     const timer = setTimeout(() => { void readPage(null, abort.signal).then(result => { if (!abort.signal.aborted) setPage(result); }).catch(e => { if (!abort.signal.aborted) setError(e.message || "读取失败，请重试。"); }).finally(() => { if (!abort.signal.aborted) setBusy(false); }); }, 120);
@@ -80,8 +78,8 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
     finally { if (!request.signal.aborted) setMoreBusy(false); }
   }
   const openPhoto = (id: string) => patch({ photo: id }, !photoId);
-  return <section className={`photo-library ${travel ? "travel-library" : ""} ${prototype ? "map-prototype-page" : ""}`}>
-    {travel && <div className="map-prototype-banner">{prototype ? <><span>连续地图 · 本地体验</span><Link href="/travels">返回现有地图<ArrowRight size={14} /></Link></> : <Link href="/travels/prototype">体验从地球到街道的连续地图<ArrowRight size={14} /></Link>}</div>}
+  return <section className={`photo-library ${travel ? "travel-library continuous-map-page" : ""}`}>
+    {prototype && <div className="map-prototype-banner"><span>连续地图体验</span><Link href="/travels">返回旅游足迹<ArrowRight size={14} /></Link></div>}
     <div className="page-heading photo-page-heading"><div><div className="photo-page-kicker">{travel ? "把走过的地方，留在星球上" : "光影里的日常"}</div><h1 className="serif">{travel ? "我们的地球足迹" : "照片墙"}</h1></div><div className="inline-actions"><Link href={timelineLink} className="button ghost"><Clock3 size={16} /><span>时光轴</span></Link><Button onClick={() => setUpload(true)}><Plus size={17} />上传照片</Button></div></div>
     <div className="photo-view-switch"><Link href={`/photos${pointQuery ? `?${pointQuery}` : ""}`} aria-current={!travel ? "page" : undefined}><ImagePlus size={16} />照片墙</Link><Link href={`${prototype ? "/travels/prototype" : "/travels"}${pointQuery ? `?${pointQuery}` : ""}`} aria-current={travel ? "page" : undefined}><Globe2 size={16} />地球足迹</Link><span>{busy ? "正在整理…" : `${page?.total ?? 0} 张照片`}</span></div>
     <div className="photo-filters"><label>参与者<select aria-label="筛选照片参与者" value={params.get("view") || "all"} onChange={e => { setCluster(null); patch({ view: e.target.value }); }}><option value="all">全部照片</option><option value="shared">我们两人</option>{data.members.map(m => <option value={m.id} key={m.id}>{m.name}</option>)}</select></label><label>时间<select aria-label="筛选照片年份" value={params.get("year") || ""} onChange={e => { setCluster(null); patch({ year: e.target.value, date: null }); }}><option value="">所有年份</option>{page?.years.map(y => <option key={y} value={y}>{y} 年</option>)}<option value="undated">日期未记</option></select></label><label>旅行<select aria-label="筛选旅行" value={params.get("trip") || ""} onChange={e => { setCluster(null); patch({ trip: e.target.value }); }}><option value="">所有旅行与日常</option>{page?.trips.map(t => <option value={t.id} key={t.id}>{t.title}</option>)}</select></label>
@@ -91,10 +89,10 @@ export function PhotoLibrary({ data, travel = false, initialPhoto, prototype = f
     {params.get("date") && <div className="photo-active-filter">{params.get("date") === "undated" ? "日期未记" : params.get("date")}<button aria-label="清除日期筛选" onClick={() => patch({ date: null })}><X size={14} /></button></div>}
     {filteredTrip && <div className="selected-trip"><div><h2 className="serif">{filteredTrip.title}</h2>{filteredTrip.description && <p>{filteredTrip.description}</p>}<small>{dateLabel(filteredTrip.startedOn)}{filteredTrip.endedOn && filteredTrip.endedOn !== filteredTrip.startedOn ? ` — ${dateLabel(filteredTrip.endedOn)}` : ""} · {filteredTrip.photoCount} 张</small></div><button className="text-link" onClick={() => setTripEditor(filteredTrip)}><Edit3 size={14} />编辑旅行</button></div>}
     <ErrorNotice text={error || pointError} />
-    {travel && <div className="travel-layout"><div className="travel-globe"><TravelMap points={points} center={center} radius={radius} picking={picking} selection={cluster} onPick={pick} onSelect={selectCluster} onClearSelection={clearArea} />
+    {travel && <div className="travel-layout"><div className="travel-globe"><ContinuousMap points={points} center={center} radius={radius} picking={picking} selection={cluster} preview={prototype} onPick={pick} onSelect={selectCluster} onClearSelection={clearArea} />
       <div className="area-controls"><Button variant={picking ? "primary" : "secondary"} onClick={() => { setPicking(v => !v); setCluster(null); }}><Crosshair size={16} />{picking ? "正在圈选" : "圈选一片足迹"}</Button>{(center || cluster) && <button className="text-link" onClick={clearArea}>清除选择</button>}
         {center && <label className="radius-control">范围半径<input aria-label="范围半径滑杆" type="range" min={-1} max={4} step={.025} value={Math.log10(radius)} onChange={e => patch({ radius: (10 ** Number(e.target.value)).toFixed(1) })} /><input type="number" aria-label="范围半径（公里）" min={.1} max={10000} step={.1} value={radius} onChange={e => { const n = Number(e.target.value); if (n >= .1 && n <= 10000) patch({ radius: String(n) }); }} />公里</label>}
-      </div><p className="travel-help">{prototype ? "移动圆圈，点击查看圈内全部照片；手机轻点地图即可圈选。缩放调整覆盖范围，拖动继续探索。地图聚焦后，回车圈选中心，Esc 清除选择。" : "滚轮或双指放大，从地球走进街道；也可直接打开详细地图。点击光点查看照片，圈选一片范围重温回忆。"}</p></div>
+      </div><p className="travel-help">移动圆圈，点击查看圈内全部照片；手机轻点地图即可圈选。缩放调整覆盖范围，拖动继续探索。地图聚焦后，回车圈选中心，Esc 清除选择。</p></div>
       <aside ref={panel} className={`travel-photo-panel ${panelExpanded ? "expanded" : ""}`}><button className="panel-handle" onClick={() => setPanelExpanded(v => !v)} aria-expanded={panelExpanded}>{cluster ? `${busy ? cluster.count : page?.total ?? 0} 张照片` : center ? `半径 ${radius.toFixed(1)} 公里` : "沿途的片刻"}<span>{panelExpanded ? "收起" : "展开"}</span></button>
         <div className="travel-panel-content"><div className="travel-panel-heading"><h2 className="serif">{cluster?.id.startsWith("screen-circle-") || center ? "这一圈的回忆" : cluster ? "在这里留下的故事" : "沿途的片刻"}</h2><small>{busy ? "正在整理…" : `${page?.total ?? 0} 张照片`}</small></div>
         {busy ? <div className="photo-loading" role="status">正在寻找照片…</div> : page?.items.length ? <div className="travel-thumbnails">{page.items.map(p => <button key={p.id} onClick={() => openPhoto(p.id)} aria-label={`查看照片 ${p.caption || p.place || dateLabel(p.takenOn)}`}><img src={`/api/assets/${p.assetId}`} alt={p.caption || p.place || "旅途照片"} loading="lazy" /><span>{p.place || dateLabel(p.takenOn)}</span></button>)}</div> : <div className="photo-quiet-empty"><MapPin size={26} /><p>{center || cluster ? "这一片还没有照片，试着扩大范围。" : "上传有 GPS 的照片，点亮第一个地方。"}</p><button className="text-link" onClick={() => setUpload(true)}>添加照片<ArrowRight size={14} /></button></div>}

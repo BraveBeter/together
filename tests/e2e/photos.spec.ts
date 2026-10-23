@@ -4,6 +4,9 @@ import sharp from "sharp";
 const mapTile = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cZ9sAAAAASUVORK5CYII=", "base64");
 test.beforeEach(async ({ page }) => {
   await page.route("https://tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: mapTile }));
+  await page.route("https://tiles.openfreemap.org/**", route => route.request().url().endsWith("/planet")
+    ? route.fulfill({ json: { tilejson: "3.0.0", tiles: ["https://tiles.openfreemap.org/test/{z}/{x}/{y}.pbf"], minzoom: 0, maxzoom: 14 } })
+    : route.fulfill({ contentType: "application/x-protobuf", body: Buffer.alloc(0) }));
 });
 async function login(page: Page, second = false) {
   await page.goto("/login"); await page.getByLabel("邮箱", { exact: true }).fill(second ? "second@e2e.test" : "first@e2e.test");
@@ -89,78 +92,55 @@ test("上传重试与并发编辑保留草稿，地球无 WebGL 时仍可浏览�
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, name: string, ...args: unknown[]) { if (name.includes("webgl")) return null; return original.apply(this, [name, ...args] as never); } as typeof original;
   });
-  await page.goto("/travels"); await expect(page.locator(".earth-fallback")).toBeVisible();
+  await page.goto("/travels"); await expect(page.locator(".map-load-error")).toContainText("地图未能启动");
   await page.locator(".footprint-locations summary").click(); await expect(page.getByRole("button", { name: /测试海边/ })).toBeVisible();
   await page.getByRole("button", { name: /测试海边/ }).click(); await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
-  await page.getByRole("button", { name: "详细地图", exact: true }).click();
-  await expect(page.getByRole("region", { name: /详细地图/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "查看照片 我的草稿仍然在", exact: true })).toBeVisible();
 });
-test("真实地球点选、圈选和 2000 点聚合；键盘与减少动态效果", async ({ page }) => {
-  await login(page); await page.emulateMedia({ reducedMotion: "reduce" }); await page.goto("/travels");
-  const marker = page.locator(".earth-marker").first(); await expect(marker).toBeVisible({ timeout: 15_000 });
-  await marker.click(); await expect(page.locator(".travel-panel-heading")).toContainText("在这里留下的故事");
-  await page.getByRole("button", { name: "清除选择", exact: true }).click();
-  await page.getByRole("button", { name: "圈选一片足迹", exact: true }).click(); await marker.click();
+test("正式连续地图圈选、街道缩放、键盘与响应式，不显示诊断工具", async ({ page }) => {
+  await login(page); await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/travels?lat=31.23&lng=121.47&radius=1");
+  const map = page.locator(".continuous-map"), canvas = map.locator("canvas");
+  await expect(map).toHaveAttribute("data-ready", "true");
+  await expect(page.locator(".map-scale-label")).toHaveText("城市");
+  await expect(page.locator(".map-prototype-checks")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "详细地图", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "OpenFreeMap", exact: true })).toBeAttached();
+  await canvas.focus(); await page.keyboard.press("Enter");
+  await expect(page.locator(".travel-panel-heading")).toContainText("这一圈的回忆");
+  await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
+  await expect(map).toHaveAttribute("data-zoom", "10.00");
+  await page.keyboard.press("Escape"); await expect(page.locator(".travel-panel-heading")).toContainText("沿途的片刻");
+  await page.getByRole("button", { name: "圈选一片足迹", exact: true }).click();
+  await canvas.focus(); await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/lat=/); await page.getByLabel("范围半径（公里）").fill("1");
   await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
-  await expect(page.getByRole("region", { name: /详细地图/ })).toBeVisible();
-  await expect(page.locator(".street-range-circle")).toBeAttached();
-  await page.getByRole("button", { name: "返回地球", exact: true }).click();
-  await expect(page.getByRole("button", { name: "开始旋转", exact: true })).toBeDisabled();
-  await page.getByRole("region", { name: /互动地球/ }).focus(); await page.keyboard.press("ArrowRight"); await page.keyboard.press("+");
+  await page.getByRole("button", { name: "街道", exact: true }).click();
+  await expect(map).toHaveAttribute("data-zoom", "16.40");
+  await canvas.focus(); await page.keyboard.press("+"); await expect(map).toHaveAttribute("data-zoom", "17.40");
+  await page.getByRole("button", { name: "地球", exact: true }).click(); await expect(map).toHaveAttribute("data-zoom", "0.25");
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 980 });
+    await expect(canvas).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+test("连续地图使用单画布承载 2000 点，底图失败保留照片且可重试", async ({ page }) => {
+  await login(page); await page.emulateMedia({ reducedMotion: "reduce" });
   const { points } = await (await page.request.get("/api/footprints")).json(), sample = points[0];
   const many = Array.from({ length: 2000 }, (_, i) => ({ ...sample, id: crypto.randomUUID(), lat: (i % 160) - 80, lng: ((i * 7) % 360) - 180 }));
   await page.route("**/api/footprints?**", route => route.fulfill({ json: { points: many } }));
   await page.goto("/travels");
-  await expect(page.locator(".earth-marker").first()).toBeAttached({ timeout: 15_000 });
-  expect(await page.locator(".earth-marker").count()).toBeLessThan(1000);
-  await expect(page.locator(".earth-canvas canvas")).toBeVisible();
-});
-test("详细地图缩放至街道、照片点与圈选、键盘及移动布局，瓦片失败可重试", async ({ page }) => {
-  await login(page); await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".continuous-map")).toHaveAttribute("data-ready", "true");
+  await expect(page.locator(".continuous-map canvas")).toHaveCount(1);
+  await expect(page.locator(".earth-marker")).toHaveCount(0);
+  await page.unroute("**/api/footprints?**");
+  await page.route("https://tiles.openfreemap.org/planet", route => route.abort());
   await page.goto("/travels?lat=31.23&lng=121.47&radius=1");
-  const map = page.getByRole("region", { name: /详细地图/ });
-  await expect(map).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
-  await expect(page.locator(".street-map .earth-marker")).toHaveCount(1);
-  // Resizing must preserve the geographic center, not shift it by half the size delta.
-  for (const width of [390, 768, 1440]) {
-    await page.setViewportSize({ width, height: 980 });
-    await expect.poll(async () => {
-      const viewport = await map.boundingBox(), point = await page.locator(".street-range-circle + path").boundingBox();
-      if (!viewport || !point) return Infinity;
-      return Math.hypot(point.x + point.width / 2 - viewport.x - viewport.width / 2, point.y + point.height / 2 - viewport.y - viewport.height / 2);
-    }).toBeLessThan(3);
-  }
-  await page.locator(".street-map .earth-marker").click();
-  await expect(page.locator(".travel-panel-heading")).toContainText("在这里留下的故事");
-  await page.getByRole("button", { name: "圈选一片足迹", exact: true }).click();
-  await page.locator(".street-map .earth-marker").click();
+  await expect(page.locator(".map-load-error")).toBeVisible();
   await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
-  await expect(page.locator(".street-range-circle")).toBeAttached();
-  const initialZoom = Number(await map.getAttribute("data-zoom"));
-  await map.focus(); await page.keyboard.press("+"); await expect(map).toHaveAttribute("data-zoom", String(initialZoom + 1));
-  for (let z = initialZoom + 1; z < 19; z++) await page.getByRole("button", { name: "放大地图", exact: true }).click();
-  await expect(map).toHaveAttribute("data-zoom", "19");
-  await expect(page.getByRole("button", { name: "放大地图", exact: true })).toBeDisabled();
-  await expect(page.locator(".street-map-status")).toContainText("街道");
-  await page.getByLabel("范围半径（公里）").fill("0.1"); await expect(map).toHaveAttribute("data-zoom", "19");
-  await map.focus(); await page.keyboard.press("ArrowRight"); await page.keyboard.press("-"); await expect(map).toHaveAttribute("data-zoom", "18");
-  for (const width of [390, 768, 1440]) {
-    await page.setViewportSize({ width, height: 980 });
-    await expect(map).toBeVisible(); await expect(page.getByRole("link", { name: "OpenStreetMap" })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  }
-  await page.route("https://tile.openstreetmap.org/**", route => route.abort());
-  // A fresh viewport avoids testing an already decoded/cached tile.
-  await page.goto("/travels?lat=31.23&lng=121.47&radius=0.1");
-  await expect(page.locator(".street-map-error")).toBeVisible();
-  await expect(page.locator(".travel-panel-heading")).toContainText("1 张照片");
-  await page.unroute("https://tile.openstreetmap.org/**");
-  await page.route("https://tile.openstreetmap.org/**", route => route.fulfill({ contentType: "image/png", body: mapTile }));
-  await page.getByRole("button", { name: "重试", exact: true }).click(); await expect(page.locator(".street-map-error")).toHaveCount(0);
-  await page.getByRole("button", { name: "返回地球", exact: true }).click();
-  await expect(page.getByRole("region", { name: /互动地球/ })).toBeVisible();
-  await expect(page.getByLabel("范围半径（公里）")).toHaveValue("0.1");
-  await page.getByRole("button", { name: "详细地图", exact: true }).click(); await expect(map).toBeVisible();
+  await page.unroute("https://tiles.openfreemap.org/planet");
+  await page.getByRole("button", { name: "重试地图", exact: true }).click();
+  await expect(page.locator(".map-load-error")).toHaveCount(0);
+  await expect(page.locator(".map-scale-label")).toHaveText("城市");
 });

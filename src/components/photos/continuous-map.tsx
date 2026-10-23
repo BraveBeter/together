@@ -15,7 +15,7 @@ import "./continuous-map.css";
 setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).toString());
 setWorkerCount(2);
 
-type Props = { points: PhotoPoint[]; center: Coordinates | null; radius?: number; picking?: boolean; selection?: PhotoCluster | null; onPick(point: Coordinates): void; onSelect?(cluster: PhotoCluster): void; onClearSelection?(): void };
+type Props = { points: PhotoPoint[]; center: Coordinates | null; radius?: number; picking?: boolean; selection?: PhotoCluster | null; preview?: boolean; onPick(point: Coordinates): void; onSelect?(cluster: PhotoCluster): void; onClearSelection?(): void };
 type Metrics = { fps: number; p95: number; frames: number };
 type CircleSelection = { id: string; ids: string[]; outline: FeatureCollection; sampleCount: number };
 const SHANGHAI: [number, number] = [121.49, 31.24];
@@ -65,7 +65,7 @@ export function ContinuousMap(props: Props) {
         locale: { "NavigationControl.ZoomIn": "放大地图", "NavigationControl.ZoomOut": "缩小地图", "NavigationControl.ResetBearing": "朝向正北", "AttributionControl.ToggleAttribution": "地图来源" },
       });
     } catch {
-      setError("地图未能启动。请开启浏览器图形加速后重试，或返回现有地图。");
+      setError("地图未能启动。请开启浏览器图形加速后重试，也可在下方按地点浏览照片。");
       setLoading(false); return;
     }
     mapRef.current = engine;
@@ -117,7 +117,7 @@ export function ContinuousMap(props: Props) {
       frameTimes.length = 0; lastFrame = 0;
     };
     const recordFrame = () => {
-      if (!engine.isMoving()) return;
+      if (!latest.current.preview || !engine.isMoving()) return;
       const now = performance.now();
       if (lastFrame) frameTimes.push(now - lastFrame);
       lastFrame = now;
@@ -292,19 +292,19 @@ export function ContinuousMap(props: Props) {
       {[{ label: "地球", zoom: .25 }, { label: "省域", zoom: 6 }, { label: "城市", zoom: 10 }, { label: "街道", zoom: 16.4 }].map(item => <button key={item.label} disabled={!ready} onClick={() => go(item.zoom)}>{item.label}</button>)}
     </div>
     <div className="map-secondary-controls">
-      <button title="定位上海，体验街道细节" aria-label="定位上海，体验街道细节" disabled={!ready} onClick={() => go(15.5, SHANGHAI)}><Compass size={18} /></button>
+      {props.preview && <button title="定位上海，体验街道细节" aria-label="定位上海，体验街道细节" disabled={!ready} onClick={() => go(15.5, SHANGHAI)}><Compass size={18} /></button>}
       <button title={large ? "退出大图" : "展开大图"} aria-label={large ? "退出大图" : "展开大图"} onClick={() => setLarge(v => !v)}>{large ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
     </div>
     <div className="map-scale-label" aria-live="polite">{mapScaleName(zoom)}{loading && !error && <span> · 细节加载中</span>}</div>
     {props.picking && <div className="map-pick-prompt">点击选择范围中心；地图聚焦后可按回车选中心</div>}
     {!props.picking && selectionMessage && <div className="map-selection-status" role="status">{selectionMessage}</div>}
     {error && <div className="map-load-error" role="alert"><span>{error}</span><button onClick={() => setAttempt(v => v + 1)}><RotateCcw size={14} />重试地图</button></div>}
-    <details className="map-prototype-checks"><summary>体验选项</summary><div>
+    {props.preview && <details className="map-prototype-checks"><summary>体验选项</summary><div>
       <label>地图上的点<select aria-label="流畅度测试点数" value={sampleCount} onChange={e => setSampleCount(Number(e.target.value))}><option value={0}>我的照片 · {props.points.length} 个点</option><option value={2000}>2,000 个模拟点</option><option value={10000}>10,000 个模拟点</option></select></label>
       <p>{sampleCount ? "模拟点只在此页面显示，不保存，也不加载照片。" : "移动圆圈，点击查看圈内全部照片；缩放地图调整覆盖范围。"}</p>
       <output aria-label="地图性能测量">{metrics ? `最近操作 ${metrics.fps} 帧/秒 · 95% 帧间隔 ≤ ${metrics.p95}ms` : "拖动或缩放后显示本次渲染帧率"}</output>
       <small>当前设备的渲染事件采样，网络加载另计。</small>
       <small>中心 {position[1].toFixed(4)}°, {position[0].toFixed(4)}° · 缩放 {zoom.toFixed(1)}</small>
-    </div></details>
+    </div></details>}
   </div>;
 }
