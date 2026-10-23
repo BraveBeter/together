@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { isMapActive, MAP_ACTIVITY_EVENT } from "@/lib/map-activity";
 
 type Star = { x: number; y: number; radius: number; alpha: number; phase: number; speed: number; warm: boolean };
 
@@ -149,7 +150,7 @@ export function StarryBackground() {
     function updateMotion() {
       cancelAnimationFrame(frame);
       lastFrame = 0;
-      const paused = motion.matches || document.hidden;
+      const paused = motion.matches || document.hidden || isMapActive();
       canvas!.dataset.motion = paused ? "still" : "animated";
       paint();
       if (!paused) frame = requestAnimationFrame(animate);
@@ -182,12 +183,14 @@ export function StarryBackground() {
     motion.addEventListener("change", updateMotion);
     document.addEventListener("visibilitychange", updateMotion);
     window.addEventListener("resize", resize);
+    window.addEventListener(MAP_ACTIVITY_EVENT, updateMotion);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       motion.removeEventListener("change", updateMotion);
       document.removeEventListener("visibilitychange", updateMotion);
       window.removeEventListener("resize", resize);
+      window.removeEventListener(MAP_ACTIVITY_EVENT, updateMotion);
     };
   }, []);
 

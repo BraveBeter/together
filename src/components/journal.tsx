@@ -43,7 +43,7 @@ export function Journal({ data, path }: { data: JournalData; path: string }) {
       {path.startsWith("/entry/") && !entry && <Empty title="作品暂不可用" text="请返回清单查看其他作品。" />}
       {path === "/imports" && <BulkImport data={data} />}
       {(path === "/photos" || path.startsWith("/photos/")) && <PhotoLibrary data={data} initialPhoto={path.split("/")[2]} />}
-      {path === "/travels" && <PhotoLibrary data={data} travel />}
+      {(path === "/travels" || path === "/travels/prototype") && <PhotoLibrary key={path} data={data} travel prototype={path === "/travels/prototype"} />}
       {path === "/settings" && <SettingsPage data={data} />}
       {path === "/trash" && <TrashPage data={data} run={run} pending={pending} />}
     </main>
