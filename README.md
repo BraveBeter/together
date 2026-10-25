@@ -142,6 +142,7 @@ npx playwright install chromium
 npm run test:e2e
 docker build -t tongye:local .
 npm run test:container
+TONGYE_TEST_IMAGE=tongye:local node scripts/verify-photo-proxy.mjs
 ```
 
 - Vitest 验证双方全部状态组合、严格交集、挑战计数、回收恢复、推荐生命周期、权限、版本冲突、旧数据库迁移和新旧备份恢复。
@@ -206,6 +207,7 @@ node --import tsx scripts/import-list.ts --file /private/reviewed.json --owner-e
 
 - 照片墙和地球共用照片、参与者、评论与回收站。点击照片可补充资料或评论，评论仅作者可修改。
 - 单次最多 50 张，每张最多 25 MB、8000 万像素；支持静态 JPG、PNG、WebP、HEIC。原图、2560px 预览和 720px 缩略图均经会话鉴权读取。解码使用独立进程与单实例队列。
+- Caddy 请求上限为 32 MB，为单张 25 MiB 照片及 multipart 表单留出空间；应用继续校验单张文件与请求总大小。部署时同步服务器专用 Caddyfile 并校验、热重载。代理验收脚本使用隔离容器，验证大图上传、重复重试和应用超限拒绝，结束后自动清理。
 - 自动读取 EXIF 拍摄日期、时区偏移和 GPS；未知日期保持空白。可以按照片或批量修改日期、位置、参与者及旅行，原始元数据独立保留。
 - 旅行可设置名称、简介、封面；日期范围按照片计算。解散只取消分组，照片和评论保留。
 - 旅游足迹使用 MapLibre 连续地图，在同一画布内从地球缩放到省市、区县和街道，照片使用细小光点呈现，支持圆形光标选择范围内所有照片。无 WebGL 时仍可按地点浏览照片。坐标统一使用 WGS84。

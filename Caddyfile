@@ -1,7 +1,8 @@
 {$DOMAIN} {
 	encode zstd gzip
 	request_body {
-		max_size 12MB
+		# Includes multipart overhead; the app enforces 25 MiB per photo.
+		max_size 32MB
 	}
 	reverse_proxy app:3000
 	header Strict-Transport-Security "max-age=31536000"

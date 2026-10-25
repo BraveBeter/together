@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Upload, RefreshCw, Check, X } from "lucide-react";
 import type { JournalData } from "@/lib/types";
 import type { Photo, Trip } from "@/lib/photo-types";
+import { readPhotoUploadResult } from "@/lib/photo-upload-result";
 import { Button, ErrorNotice, Modal } from "../ui";
 import { Participants } from "./photo-editor";
 type Item = { id: string; file: File; percent: number; state: "waiting" | "uploading" | "processing" | "done" | "error"; message: string; photo?: Photo };
@@ -27,9 +28,9 @@ export function PhotoUpload({ data, trips, initialTrip, close, completed }: { da
       const fail = (message: string) => { patch(item.id, { state: "error", message }); resolve(); };
       xhr.onerror = () => fail("网络中断，照片仍在列表中，可以重试。"); xhr.ontimeout = () => fail("处理超时，请单独重试。");
       xhr.onload = () => {
-        try { const response = JSON.parse(xhr.responseText); if (xhr.status !== 200) { fail(response.error || "上传失败，可重试。"); return; }
-          patch(item.id, { state: "done", percent: 100, photo: response.photo, message: response.duplicate ? response.photo.deletedAt ? "回收站已有这张照片，可前往恢复" : "照片已存在，保留原有信息" : "已保存" }); resolve();
-        } catch { fail("未能确认上传结果，重试会自动查重。"); }
+        const response = readPhotoUploadResult(xhr.status, xhr.responseText);
+        if (!response.ok) { fail(response.error); return; }
+        patch(item.id, { state: "done", percent: 100, photo: response.photo, message: response.duplicate ? response.photo.deletedAt ? "回收站已有这张照片，可前往恢复" : "照片已存在，保留原有信息" : "已保存" }); resolve();
       };
       xhr.send(form);
     });
