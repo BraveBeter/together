@@ -73,6 +73,11 @@ test("上传重试与并发编辑保留草稿，地球无 WebGL 时仍可浏览�
   await page.getByLabel("选择上传照片").setInputFiles("tests/fixtures/synthetic.heic");
   await page.route("**/api/photos/upload", route => route.abort());
   await page.getByRole("button", { name: "开始上传" }).click(); await expect(page.locator(".upload-row.error")).toHaveCount(1);
+  await page.unroute("**/api/photos/upload");
+  await page.route("**/api/photos/upload", route => route.fulfill({ status: 413, contentType: "text/plain", body: "Request Entity Too Large" }));
+  await page.getByRole("button", { name: "重试未完成项" }).click();
+  await expect(page.locator(".upload-row.error")).toContainText("服务器拒绝了这张照片的大小");
+  await expect(page.locator(".upload-row.error")).toContainText("synthetic.heic");
   await page.unroute("**/api/photos/upload"); await page.getByRole("button", { name: "重试未完成项" }).click();
   await expect(page.locator(".upload-row.done")).toHaveCount(1);
   await page.getByRole("button", { name: "完成", exact: true }).click();
